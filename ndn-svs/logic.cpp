@@ -19,6 +19,7 @@
 #include <ndn-cxx/signature-info.hpp>
 #include <ndn-cxx/security/signing-helpers.hpp>
 #include <ndn-cxx/security/signing-info.hpp>
+#include <clogger.h>
 
 namespace ndn {
 namespace svs {
@@ -85,6 +86,7 @@ Logic::~Logic()
 void
 Logic::onSyncInterest(const Interest &interest)
 {
+  clogger::getLogger()->log("inbound sync interest", interest);
   const auto &n = interest.getName();
   NodeID nidOther = n.get(-4).toUri();
 
@@ -172,7 +174,7 @@ Logic::sendSyncInterest()
   signingInfo.setSignedInterestFormat(security::SignedInterestFormat::V03);
   signingInfo.setSignatureInfo(signatureInfo);
   m_keyChain.sign(interest, signingInfo);
-
+  clogger::getLogger()->log("outbound sync interest", interest);
   m_face.expressInterest(interest,
                          std::bind(&Logic::onSyncAck, this, _2),
                          std::bind(&Logic::onSyncNack, this, _1, _2),
@@ -192,7 +194,7 @@ Logic::sendSyncAck(const Name &n)
     m_keyChain.sign(*data, signingByIdentity(m_signingId));
 
   data->setFreshnessPeriod(m_syncAckFreshness);
-
+  clogger::getLogger()->log("outbound sync ack", *data);
   int delay = m_packetDist(m_rng);
   m_scheduler.schedule(time::microseconds(delay),
                        [this, data] { m_face.put(*data); });

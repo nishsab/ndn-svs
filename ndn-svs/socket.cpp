@@ -18,6 +18,7 @@
 
 #include <ndn-cxx/util/string-helper.hpp>
 #include <ndn-cxx/security/signing-helpers.hpp>
+#include <clogger.h>
 
 namespace ndn {
 namespace svs {
@@ -109,6 +110,7 @@ Socket::publishData(const Block& content, const ndn::time::milliseconds& freshne
 
 void Socket::onDataInterest(const Interest &interest) {
   // If have data, reply. Otherwise forward with probability (?)
+  clogger::getLogger()->log("inbound data interest", interest);
   shared_ptr<const Data> data = m_ims.find(interest);
   if (data != nullptr)
   {
