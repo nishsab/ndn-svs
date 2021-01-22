@@ -19,7 +19,7 @@
 
 #include "common.hpp"
 
-#include <unordered_map>
+#include <map>
 
 #include <ndn-cxx/util/string-helper.hpp>
 
@@ -28,21 +28,30 @@ namespace svs {
 
 class VersionVector
 {
+
 public:
-  using const_iterator = std::unordered_map<NodeID, SeqNo>::const_iterator;
+  class Error : public std::runtime_error
+  {
+  public:
+    explicit
+    Error(const std::string& what)
+      : std::runtime_error(what)
+    {
+    }
+  };
+
+public:
+  using const_iterator = std::map<NodeID, SeqNo>::const_iterator;
 
   VersionVector() = default;
 
   VersionVector(const VersionVector&) = default;
 
   /** Decode a version vector from ndn::buffer */
-  VersionVector(const ndn::Buffer encoded);
-
-  /** Decode a version vector from raw buffer */
-  VersionVector(const uint8_t* buf, const size_t size);
+  VersionVector(const ndn::Block& encoded);
 
   /** Encode the version vector to a string */
-  ndn::Buffer
+  ndn::Block
   encode() const;
 
   /** Get a human-readable representation */
@@ -52,36 +61,36 @@ public:
   SeqNo
   set(NodeID nid, SeqNo seqNo)
   {
-    m_umap[nid] = seqNo;
+    m_map[nid] = seqNo;
     return seqNo;
   }
 
   SeqNo
   get(NodeID nid) const
   {
-    auto elem = m_umap.find(nid);
-    return elem == m_umap.end() ? 0 : elem->second;
+    auto elem = m_map.find(nid);
+    return elem == m_map.end() ? 0 : elem->second;
   }
 
   const_iterator
   begin() const
   {
-    return m_umap.begin();
+    return m_map.begin();
   }
 
   const_iterator
   end() const
   {
-    return m_umap.end();
+    return m_map.end();
   }
 
   bool
   has(NodeID nid) const
   {
-    return m_umap.find(nid) != end();
+    return m_map.find(nid) != end();
   }
 private:
-  std::unordered_map<NodeID, SeqNo> m_umap;
+  std::map<NodeID, SeqNo> m_map;
 };
 
 } // namespace ndn

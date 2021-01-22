@@ -63,15 +63,33 @@ BOOST_AUTO_TEST_CASE(Iterate)
 
 BOOST_AUTO_TEST_CASE(EncodeDecode)
 {
-  ndn::Buffer buf = v.encode();
-  BOOST_CHECK_GT(buf.size(), 0);
+  ndn::Block block = v.encode();
+  BOOST_CHECK_GT(block.value_size(), 0);
 
   // 100 bytes is too big
-  BOOST_CHECK_LT(buf.size(), 100);
+  BOOST_CHECK_LT(block.value_size(), 100);
 
-  VersionVector dv(buf);
+  VersionVector dv(block);
   BOOST_CHECK_EQUAL(dv.get("one"), 1);
   BOOST_CHECK_EQUAL(dv.get("two"), 2);
+}
+
+BOOST_AUTO_TEST_CASE(Ordering)
+{
+  VersionVector v1;
+  v1.set("one", 1);
+  v1.set("two", 2);
+  VersionVector v2;
+  v2.set("two", 2);
+  v2.set("one", 1);
+
+  Block v1e = v1.encode();
+  Block v2e = v2.encode();
+
+  std::string v1str(reinterpret_cast<const char*>(v1e.value()), v1e.value_size());
+  std::string v2str(reinterpret_cast<const char*>(v2e.value()), v2e.value_size());
+
+  BOOST_CHECK_EQUAL(v1str, v2str);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
