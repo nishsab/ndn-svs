@@ -120,6 +120,7 @@ Logic::onSyncInterest(const Interest &interest)
 void
 Logic::onSyncAck(const Data &data)
 {
+  clogger::getLogger()->log("inbound sync ack", data);
   VersionVector vvOther(data.getContent().blockFromValue());
   mergeStateVector(vvOther);
 }
@@ -128,11 +129,13 @@ Logic::onSyncAck(const Data &data)
 void
 Logic::onSyncNack(const Interest &interest, const lp::Nack &nack)
 {
+    clogger::getLogger()->log("sync nack", interest);
 }
 
 void
 Logic::onSyncTimeout(const Interest &interest)
 {
+  clogger::getLogger()->log("sync timeout", interest);
 }
 
 void

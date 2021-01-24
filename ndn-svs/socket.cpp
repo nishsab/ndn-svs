@@ -137,6 +137,7 @@ Socket::fetchData(const NodeID& nid, const SeqNo& seqNo,
   DataValidationErrorCallback failureCallback =
     bind(&Socket::onDataValidationFailed, this, _1, _2);
 
+  clogger::getLogger()->log("outbound data interest", interest);
   m_face.expressInterest(interest,
                          bind(&Socket::onData, this, _1, _2, dataCallback, failureCallback),
                          bind(&Socket::onDataTimeout, this, _1, nRetries,
@@ -159,6 +160,7 @@ Socket::fetchData(const NodeID& nid, const SeqNo& seqNo,
   interest.setMustBeFresh(true);
   interest.setCanBePrefix(false);
 
+  clogger::getLogger()->log("outbound data interest", interest);
   m_face.expressInterest(interest,
                          bind(&Socket::onData, this, _1, _2, dataCallback, failureCallback),
                          bind(onTimeout, _1), // Nack
@@ -170,6 +172,7 @@ Socket::onData(const Interest& interest, const Data& data,
                const DataValidatedCallback& onValidated,
                const DataValidationErrorCallback& onFailed)
 {
+  clogger::getLogger()->log("inbound data packet", data);
   if (static_cast<bool>(m_validator))
     m_validator->validate(data, onValidated, onFailed);
   else
@@ -187,6 +190,7 @@ Socket::onDataTimeout(const Interest& interest, int nRetries,
   Interest newNonceInterest(interest);
   newNonceInterest.refreshNonce();
 
+  clogger::getLogger()->log("outbound data timeout retry", interest);
   m_face.expressInterest(newNonceInterest,
                          bind(&Socket::onData, this, _1, _2, onValidated, onFailed),
                          bind(&Socket::onDataTimeout, this, _1, nRetries - 1,

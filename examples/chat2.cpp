@@ -33,8 +33,8 @@ public:
   std::string prefix;
   std::string m_id;
   int m_stateVectorLogIntervalInMilliseconds = 1000;
-  int averageTimeBetweenPublishesInMilliseconds = 3000;
-  int varianceInTimeBetweenPublishesInMilliseconds = 1000;
+  int averageTimeBetweenPublishesInMilliseconds = 5000;
+  int varianceInTimeBetweenPublishesInMilliseconds = 0;
 };
 
 class Program
@@ -47,7 +47,7 @@ public:
     clogger::getLogger()->startLogger("/home/ubuntu/logs/svs/" + instanceName + ".log", instanceName);
     clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
     m_validator = std::make_shared<ndn::security::ValidatorConfig>(face);
-    m_validator->load("/home/ubuntu/ndn-shared/src/local-ndn-svs/ndn-svs/example-security/validation.conf");
+    m_validator->load("/home/ubuntu/example-security/validation.conf");
 
     m_svs = std::make_shared<ndn::svs::Socket>(
       ndn::Name(m_options.prefix),
@@ -57,7 +57,7 @@ public:
       ndn::Name(m_options.m_id),
       m_validator);
 
-    std::cout << "SVS client stared:" << m_options.m_id << std::endl;
+    //std::cout << "SVS client stared:" << m_options.m_id << std::endl;
   }
 
   void
@@ -72,11 +72,11 @@ public:
 
     std::string userInput = "";
 
-    for (int i=0; i<60; i++) {
+    for (int i=0; i<24; i++) {
         std::ostringstream ss = std::ostringstream();
         ss << m_options.m_id << ": message " << i;
         std::string message = ss.str();
-        std::cout << "Publishing " << message << std::endl;
+        //std::cout << "Publishing " << message << std::endl;
 
         publishMsg(message);
         int sleepTimeInMilliseconds = getRandomIntAroundCenter(m_options.averageTimeBetweenPublishesInMilliseconds, m_options.varianceInTimeBetweenPublishesInMilliseconds);
@@ -111,7 +111,7 @@ private:
             size_t data_size = data.getContent().value_size();
             std::string content_str((char *)data.getContent().value(), data_size);
             content_str = nid + " : " + content_str;
-            std::cout << content_str << std::endl;
+            //std::cout << content_str << std::endl;
           });
       }
     }
