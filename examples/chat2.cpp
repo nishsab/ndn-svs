@@ -34,7 +34,7 @@ public:
   std::string m_id;
   int m_stateVectorLogIntervalInMilliseconds = 1000;
   int averageTimeBetweenPublishesInMilliseconds = 5000;
-  int varianceInTimeBetweenPublishesInMilliseconds = 0;
+  int varianceInTimeBetweenPublishesInMilliseconds = 1000;
 };
 
 class Program
@@ -44,7 +44,7 @@ public:
     : m_options(options)
   {
     instanceName = ndn::Name(m_options.m_id).get(-1).toUri();
-    clogger::getLogger()->startLogger("/home/ubuntu/logs/svs/" + instanceName + ".log", instanceName);
+    clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
     clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
     m_validator = std::make_shared<ndn::security::ValidatorConfig>(face);
     m_validator->load("/home/ubuntu/example-security/validation.conf");

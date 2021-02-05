@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdarg>
+#include <mutex> 
 #include "clogger.h"
 
 clogger* clogger::m_logger = NULL;
@@ -13,6 +14,7 @@ std::ofstream clogger::m_logFile;
 std::string clogger::instanceName;
 bool debug = false;
 const std::string DELIM = "\t";
+std::mutex lock;
 
 void clogger::startLogger(std::string path, std::string instanceName) {
   if (m_logger != NULL) {
@@ -34,7 +36,9 @@ void clogger::log(std::string logType, std::string message) {
   if (debug) {
     std::cout << logLine << std::endl;
   }
+  lock.lock();
   m_logFile << logLine << std::endl;
+  lock.unlock();
 }
 
 void clogger::logf(std::string logType, const char * format, ...)
@@ -56,8 +60,10 @@ void clogger::logf(std::string logType, const char * format, ...)
   if (debug) {
     std::cout << logLine << std::endl;
   }
+  lock.lock();
   m_logFile << logLine << std::endl;
-
+  lock.unlock();
+  
   delete [] charBuf;
 }
 

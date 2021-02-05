@@ -166,6 +166,7 @@ Logic::sendSyncInterest()
   interest.setCanBePrefix(true);
   interest.setMustBeFresh(true);
 
+  clogger::getLogger()->log("outbound sync interest", interest);
   m_face.expressInterest(interest,
                          std::bind(&Logic::onSyncAck, this, _2),
                          std::bind(&Logic::onSyncNack, this, _1, _2),
