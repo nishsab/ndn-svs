@@ -47,7 +47,7 @@ public:
     clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
     clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
     m_validator = std::make_shared<ndn::security::ValidatorConfig>(face);
-    m_validator->load("/home/ubuntu/example-security/validation.conf");
+    m_validator->load("/opt/svs/example-security/validation.conf");
 
     m_svs = std::make_shared<ndn::svs::Socket>(
       ndn::Name(m_options.prefix),
