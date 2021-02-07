@@ -110,7 +110,7 @@ Socket::publishData(const Block& content, const ndn::time::milliseconds& freshne
 
 void Socket::onDataInterest(const Interest &interest) {
   // If have data, reply. Otherwise forward with probability (?)
-  clogger::getLogger()->log("inbound data interest", interest);
+  clogger::getLogger()->log(inbound_data_interest, interest);
   shared_ptr<const Data> data = m_ims.find(interest);
   if (data != nullptr)
   {
@@ -139,7 +139,7 @@ Socket::fetchData(const NodeID& nid, const SeqNo& seqNo,
   TimeoutCallback onTimeout =
     [] (const Interest& interest) {};
 
-  clogger::getLogger()->log("outbound data interest", interest);
+  clogger::getLogger()->log(outbound_data_interest, interest);
   m_face.expressInterest(interest,
                          bind(&Socket::onData, this, _1, _2, onValidated, onValidationFailed),
                          bind(&Socket::onDataTimeout, this, _1, nRetries,
@@ -162,7 +162,7 @@ Socket::fetchData(const NodeID& nid, const SeqNo& seqNo,
   interest.setMustBeFresh(true);
   interest.setCanBePrefix(false);
 
-  clogger::getLogger()->log("outbound data interest", interest);
+  clogger::getLogger()->log(outbound_data_interest, interest);
   m_face.expressInterest(interest,
                          bind(&Socket::onData, this, _1, _2, onValidated, onValidationFailed),
                          bind(&Socket::onDataTimeout, this, _1, nRetries,
@@ -176,7 +176,7 @@ Socket::onData(const Interest& interest, const Data& data,
                const DataValidatedCallback& onValidated,
                const DataValidationErrorCallback& onFailed)
 {
-  clogger::getLogger()->log("inbound data packet", data);
+  clogger::getLogger()->log(inbound_data_packet, data);
   if (static_cast<bool>(m_validator))
     m_validator->validate(data, onValidated, onFailed);
   else
@@ -195,7 +195,7 @@ Socket::onDataTimeout(const Interest& interest, int nRetries,
   Interest newNonceInterest(interest);
   newNonceInterest.refreshNonce();
 
-  clogger::getLogger()->log("outbound data timeout retry", interest);
+  clogger::getLogger()->log(outbound_data_timeout_retry, interest);
   m_face.expressInterest(newNonceInterest,
                          bind(&Socket::onData, this, _1, _2, dataCallback, failCallback),
                          bind(&Socket::onDataTimeout, this, _1, nRetries - 1,

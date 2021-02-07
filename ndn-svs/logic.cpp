@@ -78,7 +78,7 @@ Logic::~Logic()
 void
 Logic::onSyncInterest(const Interest &interest)
 {
-  clogger::getLogger()->log("inbound sync interest", interest);
+  clogger::getLogger()->log(inbound_sync_interest, interest);
   const auto &n = interest.getName();
 
   // Merge state vector
@@ -118,7 +118,7 @@ Logic::onSyncInterest(const Interest &interest)
 void
 Logic::onSyncAck(const Data &data)
 {
-  clogger::getLogger()->log("inbound sync ack", data);
+  clogger::getLogger()->log(inbound_sync_ack, data);
   VersionVector vvOther(data.getContent().blockFromValue());
   mergeStateVector(vvOther);
 }
@@ -127,13 +127,13 @@ Logic::onSyncAck(const Data &data)
 void
 Logic::onSyncNack(const Interest &interest, const lp::Nack &nack)
 {
-    clogger::getLogger()->log("sync nack", interest);
+    clogger::getLogger()->log(sync_nack, interest);
 }
 
 void
 Logic::onSyncTimeout(const Interest &interest)
 {
-  clogger::getLogger()->log("sync timeout", interest);
+  clogger::getLogger()->log(sync_timeout, interest);
 }
 
 void
@@ -166,7 +166,7 @@ Logic::sendSyncInterest()
   interest.setCanBePrefix(true);
   interest.setMustBeFresh(true);
 
-  clogger::getLogger()->log("outbound sync interest", interest);
+  clogger::getLogger()->log(outbound_sync_interest, interest);
   m_face.expressInterest(interest,
                          std::bind(&Logic::onSyncAck, this, _2),
                          std::bind(&Logic::onSyncNack, this, _1, _2),
@@ -191,7 +191,7 @@ Logic::sendSyncAck(const Name &n)
       m_keyChain.sign(*data, signingByIdentity(m_signingId));
 
     data->setFreshnessPeriod(m_syncAckFreshness);
-    clogger::getLogger()->log("outbound sync ack", *data);
+    clogger::getLogger()->log(outbound_sync_ack, *data);
 
     m_face.put(*data);
   });
