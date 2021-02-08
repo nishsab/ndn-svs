@@ -142,19 +142,11 @@ std::string clogger::getLogLine(std::string instanceName, std::string logType, s
 void clogger::stopLogger() {
   std::ostringstream stringStream;
   for (int txn_type = inbound_sync_interest; txn_type < txn_max; txn_type++){
-    stringStream << names[txn_type];
+    stringStream << names[txn_type] << ":" << counts[txn_type];
     if (txn_type < txn_max-1) {
       stringStream << ",";
     }
   }
-  stringStream << '\n';
-  for (int txn_type = inbound_sync_interest; txn_type < txn_max; txn_type++){
-    stringStream << counts[txn_type];
-    if (txn_type < txn_max-1) {
-      stringStream << ",";
-    }
-  }
-  stringStream << '\n';
   lock.lock();
   m_logFile << stringStream.str() << std::endl;
   lock.unlock();

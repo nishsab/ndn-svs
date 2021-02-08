@@ -45,7 +45,7 @@ public:
   {
     instanceName = ndn::Name(m_options.m_id).get(-1).toUri();
     clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
-    clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
+    //clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
     m_validator = std::make_shared<ndn::security::ValidatorConfig>(face);
     m_validator->load("/opt/svs/example-security/validation.conf");
 
@@ -83,6 +83,8 @@ public:
         usleep(sleepTimeInMilliseconds * 1000);
     }
 
+    clogger::getLogger()->stopLogger();
+
     m_running = false;
     thread_log_state_vector.join();
     face.shutdown();
@@ -92,7 +94,7 @@ public:
   void logStateVector() const {
     while (m_running) {
       std::string stateVector = m_svs->getLogic().getStateStr();
-      clogger::getLogger()->log("state vector", stateVector);
+      clogger::getLogger()->log_direct("state vector", stateVector);
       usleep(m_options.m_stateVectorLogIntervalInMilliseconds * 1000);
     }
   }
