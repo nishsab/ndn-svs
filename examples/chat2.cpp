@@ -20,7 +20,7 @@
 #include <vector>
 
 #include <ndn-cxx/security/validator-config.hpp>
-
+#include <ndn-cxx/util/random.hpp>
 #include <ndn-svs/socket.hpp>
 #include <clogger.h>
 
@@ -33,15 +33,18 @@ public:
   std::string prefix;
   std::string m_id;
   int m_stateVectorLogIntervalInMilliseconds = 1000;
-  int averageTimeBetweenPublishesInMilliseconds = 5000;
-  int varianceInTimeBetweenPublishesInMilliseconds = 1000;
+  int averageTimeBetweenPublishesInMilliseconds = 30000;
+  int varianceInTimeBetweenPublishesInMilliseconds = 5000;
 };
 
 class Program
 {
 public:
   Program(const Options &options)
-    : m_options(options)
+    : m_rng(ndn::random::getRandomNumberEngine()),
+      m_sleepTime(options.averageTimeBetweenPublishesInMilliseconds - options.varianceInTimeBetweenPublishesInMilliseconds, options.averageTimeBetweenPublishesInMilliseconds + options.varianceInTimeBetweenPublishesInMilliseconds),
+      m_options(options)
+      
   {
     instanceName = ndn::Name(m_options.m_id).get(-1).toUri();
     clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
@@ -79,7 +82,9 @@ public:
         //std::cout << "Publishing " << message << std::endl;
 
         publishMsg(message);
-        int sleepTimeInMilliseconds = getRandomIntAroundCenter(m_options.averageTimeBetweenPublishesInMilliseconds, m_options.varianceInTimeBetweenPublishesInMilliseconds);
+        //int sleepTimeInMilliseconds = getRandomIntAroundCenter(m_options.averageTimeBetweenPublishesInMilliseconds, m_options.varianceInTimeBetweenPublishesInMilliseconds);
+        int sleepTimeInMilliseconds = m_sleepTime(m_rng);
+        std::cout << sleepTimeInMilliseconds << std::endl;
         usleep(sleepTimeInMilliseconds * 1000);
     }
 
@@ -134,7 +139,8 @@ private:
 
   std::string instanceName;
   volatile bool m_running = false;
-
+  ndn::random::RandomNumberEngine& m_rng;
+  std::uniform_int_distribution<> m_sleepTime;
 
 
 public:
