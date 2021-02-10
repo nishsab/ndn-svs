@@ -61,14 +61,9 @@ Logic::Logic(ndn::Face& face,
   // Register sync interest filter
   m_syncRegisteredPrefix =
     m_face.setInterestFilter(syncPrefix,
-                             [&] (const Name& prefix, const Interest& interest) {
-                                // TODO: verify the sync interest (pseudo-)signature
-                                onSyncInterest(interest);
-                             },
+                             bind(&Logic::onSyncInterest, this, _2),
+                             bind(&Logic::retxSyncInterest, this, true, 0),
                              [] (const Name& prefix, const std::string& msg) {});
-
-  // Start periodically send sync interest
-  retxSyncInterest();
 }
 
 Logic::~Logic()
@@ -92,13 +87,12 @@ Logic::onSyncInterest(const Interest &interest)
     sendSyncAck(n);
 #endif
 
-  // If incoming state identical to local vector, reset timer to delay sending
-  //  next sync interest.
-  // If incoming state different from local vector, send sync interest immediately.
-  // If ACK enabled, do not send interest when local is newer.
-  if (!myVectorNew && !otherVectorNew)
+  // If incoming state identical/newer to local vector, reset timer
+  // If incoming state is older, send sync interest immediately
+  // If ACK enabled, do not send interest when local is newer
+  if (!myVectorNew)
   {
-    retxSyncInterest(false);
+    retxSyncInterest(false, 0);
   }
   else
 #ifdef NDN_SVS_WITH_SYNC_ACK
@@ -137,19 +131,19 @@ Logic::onSyncTimeout(const Interest &interest)
 }
 
 void
-Logic::retxSyncInterest(const bool send, int delay)
+Logic::retxSyncInterest(const bool send, unsigned int delay)
 {
   if (send)
     sendSyncInterest();
 
-  if (delay < 0)
+  if (delay == 0)
     delay = m_retxDist(m_rng);
 
   // Store the scheduled time
   m_nextSyncInterest = getCurrentTime() + 1000 * delay;
 
   m_retxEvent = m_scheduler.schedule(time::milliseconds(delay),
-                                     [this] { retxSyncInterest(); });
+                                     [this] { retxSyncInterest(true, 0); });
 }
 
 void
