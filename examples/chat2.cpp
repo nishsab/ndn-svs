@@ -84,10 +84,10 @@ public:
         publishMsg(message);
         //int sleepTimeInMilliseconds = getRandomIntAroundCenter(m_options.averageTimeBetweenPublishesInMilliseconds, m_options.varianceInTimeBetweenPublishesInMilliseconds);
         int sleepTimeInMilliseconds = m_sleepTime(m_rng);
-        std::cout << sleepTimeInMilliseconds << std::endl;
         usleep(sleepTimeInMilliseconds * 1000);
     }
 
+    usleep(400 * 1000);
     clogger::getLogger()->stopLogger();
 
     m_running = false;

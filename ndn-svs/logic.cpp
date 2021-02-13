@@ -45,7 +45,7 @@ Logic::Logic(ndn::Face& face,
   , m_rng(ndn::random::getRandomNumberEngine())
   , m_packetDist(10, 15)
   , m_retxDist(30000 * 0.9, 30000 * 1.1)
-  , m_intrReplyDist(50 * 0.9, 50 * 1.1)
+  , m_intrReplyDist(200 * 0.9, 200 * 1.1)
   , m_syncAckFreshness(syncAckFreshness)
   , m_keyChain(keyChain)
   , m_validator(validator)
@@ -80,6 +80,7 @@ Logic::onSyncInterest(const Interest &interest)
   bool myVectorNew, otherVectorNew;
   VersionVector vvOther(n.get(-1));
   std::tie(myVectorNew, otherVectorNew) = mergeStateVector(vvOther);
+  mergeAggregate(vvOther);
 
 #ifdef NDN_SVS_WITH_SYNC_ACK
   // If my vector newer, send ACK
@@ -133,8 +134,14 @@ Logic::onSyncTimeout(const Interest &interest)
 void
 Logic::retxSyncInterest(const bool send, unsigned int delay)
 {
-  if (send)
-    sendSyncInterest();
+  if (send) {
+    bool myVectorNew, otherVectorNew;
+    std::tie(myVectorNew, otherVectorNew) = mergeStateVector(m_aggregatevv);
+    if (myVectorNew) {
+      sendSyncInterest();
+    }
+    m_aggregatevv = VersionVector();
+  }
 
   if (delay == 0)
     delay = m_retxDist(m_rng);
@@ -241,6 +248,24 @@ Logic::mergeStateVector(const VersionVector &vvOther)
   }
 
   return std::make_pair(myVectorNew, otherVectorNew);
+}
+
+void
+Logic::mergeAggregate(const VersionVector &vvOther)
+{
+  std::lock_guard<std::mutex> lock(m_vvMutex);
+
+  for (auto entry : vvOther)
+  {
+    NodeID nidOther = entry.first;
+    SeqNo seqOther = entry.second;
+    SeqNo seqCurrent = m_aggregatevv.get(nidOther);
+
+    if (seqCurrent < seqOther)
+    {
+      m_aggregatevv.set(nidOther, seqOther);
+    }
+  }
 }
 
 void
