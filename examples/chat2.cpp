@@ -87,7 +87,7 @@ public:
         usleep(sleepTimeInMilliseconds * 1000);
     }
 
-    usleep(400 * 1000);
+    //usleep(400 * 1000);
     clogger::getLogger()->stopLogger();
 
     m_running = false;

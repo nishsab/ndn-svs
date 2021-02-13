@@ -84,6 +84,11 @@ public:
     return m_map.end();
   }
 
+  bool empty()
+  {
+    return m_map.empty();
+  }
+
   bool
   has(NodeID nid) const
   {

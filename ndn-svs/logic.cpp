@@ -82,12 +82,16 @@ Logic::onSyncInterest(const Interest &interest)
   std::tie(myVectorNew, otherVectorNew) = mergeStateVector(vvOther);
   mergeAggregate(vvOther);
 
-#ifdef NDN_SVS_WITH_SYNC_ACK
-  // If my vector newer, send ACK
   if (myVectorNew)
-    sendSyncAck(n);
-#endif
-
+  {
+    setAggregateIfEmpty(vvOther);
+    int delay = m_intrReplyDist(m_rng);
+    if (getCurrentTime() + delay * 1000 < m_nextSyncInterest)
+    {
+      retxSyncInterest(false, delay);
+    }
+  }
+  /*
   // If incoming state identical/newer to local vector, reset timer
   // If incoming state is older, send sync interest immediately
   // If ACK enabled, do not send interest when local is newer
@@ -96,9 +100,6 @@ Logic::onSyncInterest(const Interest &interest)
     retxSyncInterest(false, 0);
   }
   else
-#ifdef NDN_SVS_WITH_SYNC_ACK
-  if (otherVectorNew)
-#endif
   {
     // Check how much time is left on the timer,
     // reset to ~m_intrReplyDist if more than that.
@@ -108,6 +109,7 @@ Logic::onSyncInterest(const Interest &interest)
       retxSyncInterest(false, delay);
     }
   }
+  */
 }
 
 void
@@ -140,6 +142,7 @@ Logic::retxSyncInterest(const bool send, unsigned int delay)
     if (myVectorNew) {
       sendSyncInterest();
     }
+    recording = false;
     m_aggregatevv = VersionVector();
   }
 
@@ -265,6 +268,16 @@ Logic::mergeAggregate(const VersionVector &vvOther)
     {
       m_aggregatevv.set(nidOther, seqOther);
     }
+  }
+}
+
+void
+Logic::setAggregateIfEmpty(const VersionVector &vvOther) {
+  std::lock_guard<std::mutex> lock(m_vvMutex);
+
+  if (!recording) {
+    recording = true;
+    m_aggregatevv = vvOther;
   }
 }
 

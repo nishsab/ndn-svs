@@ -193,6 +193,9 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   void
   mergeAggregate(const VersionVector &vvOther);
 
+  void
+  setAggregateIfEmpty(const VersionVector &vvOther);
+
   /// @brief Reference to scheduler
   ndn::Scheduler&
   getScheduler()
@@ -233,6 +236,7 @@ private:
   // State
   VersionVector m_vv;
   VersionVector m_aggregatevv;
+  bool recording = false;
   mutable std::mutex m_vvMutex;
 
   // Random Engine
