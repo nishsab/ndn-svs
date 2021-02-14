@@ -25,11 +25,13 @@ namespace svs {
 
 const ndn::Name Socket::DEFAULT_NAME;
 const std::shared_ptr<Validator> Socket::DEFAULT_VALIDATOR;
+const NodeID Socket::EMPTY_NODE_ID;
 
 Socket::Socket(const Name& syncPrefix,
                const NodeID& id,
                ndn::Face& face,
                const UpdateCallback& updateCallback,
+               const std::string& syncKey,
                const Name& signingId,
                std::shared_ptr<Validator> validator)
   : m_syncPrefix(Name(syncPrefix).append("s"))
@@ -39,11 +41,11 @@ Socket::Socket(const Name& syncPrefix,
   , m_face(face)
   , m_validator(validator)
   , m_onUpdate(updateCallback)
-  , m_logic(face, m_keyChain, m_syncPrefix, updateCallback, m_signingId,
-            m_validator, Logic::DEFAULT_ACK_FRESHNESS, m_id)
+  , m_logic(face, m_keyChain, m_syncPrefix, updateCallback,
+            syncKey, m_signingId, m_id)
 {
   m_registeredDataPrefix =
-    m_face.setInterestFilter(Name(m_dataPrefix).append(m_id),
+    m_face.setInterestFilter(Name(m_dataPrefix),
                              bind(&Socket::onDataInterest, this, _2),
                              [] (const Name& prefix, const std::string& msg) {});
 }
@@ -53,50 +55,26 @@ Socket::~Socket()
 }
 
 void
-Socket::publishData(const uint8_t* buf, size_t len, const ndn::time::milliseconds& freshness)
-{
-  publishData(ndn::encoding::makeBinaryBlock(ndn::tlv::Content, buf, len), freshness);
-}
-
-void
 Socket::publishData(const uint8_t* buf, size_t len, const ndn::time::milliseconds& freshness,
-                    const uint64_t& seqNo)
+                    const uint64_t& seqNo, const NodeID id)
 {
-  publishData(ndn::encoding::makeBinaryBlock(ndn::tlv::Content, buf, len), freshness, seqNo);
-}
-
-void
-Socket::publishData(const Block& content, const ndn::time::milliseconds& freshness)
-{
-  shared_ptr<Data> data = make_shared<Data>();
-  data->setContent(content);
-  data->setFreshnessPeriod(freshness);
-
-  SeqNo newSeq = m_logic.getSeqNo(m_id) + 1;
-  Name dataName(m_dataPrefix);
-  dataName.append(m_id).appendNumber(newSeq);
-  data->setName(dataName);
-
-  if (m_signingId.empty())
-    m_keyChain.sign(*data);
-  else
-    m_keyChain.sign(*data, signingByIdentity(m_signingId));
-
-  m_ims.insert(*data);
-  m_logic.updateSeqNo(newSeq, m_id);
+  publishData(ndn::encoding::makeBinaryBlock(ndn::tlv::Content, buf, len), freshness, seqNo, id);
 }
 
 void
 Socket::publishData(const Block& content, const ndn::time::milliseconds& freshness,
-                    const uint64_t& seqNo)
+                    const uint64_t& seqNo, const NodeID id)
 {
   shared_ptr<Data> data = make_shared<Data>();
   data->setContent(content);
   data->setFreshnessPeriod(freshness);
 
-  SeqNo newSeq = seqNo;
+  NodeID pubId = id != EMPTY_NODE_ID ? id : m_id;
+  SeqNo newSeq = seqNo > 0 ? seqNo : m_logic.getSeqNo(pubId) + 1;
+  clogger::getLogger()->log("publish data", to_string(newSeq));
+
   Name dataName(m_dataPrefix);
-  dataName.append(m_id).appendNumber(newSeq);
+  dataName.append(pubId).appendNumber(newSeq);
   data->setName(dataName);
 
   if (m_signingId.empty())
@@ -105,7 +83,7 @@ Socket::publishData(const Block& content, const ndn::time::milliseconds& freshne
     m_keyChain.sign(*data, signingByIdentity(m_signingId));
 
   m_ims.insert(*data);
-  m_logic.updateSeqNo(newSeq, m_id);
+  m_logic.updateSeqNo(newSeq, pubId);
 }
 
 void Socket::onDataInterest(const Interest &interest) {

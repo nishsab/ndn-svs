@@ -8,6 +8,10 @@
 #include <cstdarg>
 #include <mutex> 
 #include "clogger.h"
+#include <stdio.h>
+#include <sys/time.h>
+#include <time.h>
+#include <math.h>
 
 clogger* clogger::m_logger = NULL;
 std::ofstream clogger::m_logFile;
@@ -81,9 +85,21 @@ void clogger::log(std::string logType, ndn::Data data) {
 
 std::string clogger::getLogLine(std::string instanceName, std::string logType, std::string message) {
   char timestamp[64];
-  struct tm time_buffer;
-  time_t tm = time(NULL);
-  int len = strftime(timestamp, sizeof(timestamp), "%m/%d %H:%M:%S", localtime_r(&tm, &time_buffer));
+  int millisec;
+  struct tm* tm_info;
+  struct timeval tv;
+
+  gettimeofday(&tv, NULL);
+  millisec = lrint(tv.tv_usec/1000.0); // Round to nearest millisec
+  if (millisec>=1000) { // Allow for rounding up to nearest second
+    millisec -= 1000;
+    tv.tv_sec++;
+  }
+
+  tm_info = localtime(&tv.tv_sec);
+
+  int len = strftime(timestamp, sizeof(timestamp), "%Y/%m/%d %H:%M:%S", tm_info);
+  len += sprintf(timestamp + len, ".%03d", millisec);
   timestamp[len] = 0;
 
   std::ostringstream stringStream;

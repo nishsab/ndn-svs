@@ -18,6 +18,7 @@
 
 #include <ndn-cxx/security/signing-helpers.hpp>
 #include <clogger.h>
+#include <ndn-cxx/security/verification-helpers.hpp>
 
 namespace ndn {
 namespace svs {
@@ -25,30 +26,28 @@ namespace svs {
 int Logic::s_instanceCounter = 0;
 
 const ndn::Name Logic::DEFAULT_NAME;
-const std::shared_ptr<Validator> Logic::DEFAULT_VALIDATOR;
 const NodeID Logic::EMPTY_NODE_ID;
-const time::milliseconds Logic::DEFAULT_ACK_FRESHNESS = time::milliseconds(4000);
+const std::string Logic::DEFAULT_SYNC_KEY;
 
 Logic::Logic(ndn::Face& face,
              ndn::KeyChain& keyChain,
              const Name& syncPrefix,
              const UpdateCallback& onUpdate,
+             const std::string& syncKey,
              const Name& signingId,
-             std::shared_ptr<Validator> validator,
-             const time::milliseconds& syncAckFreshness,
              const NodeID nid)
   : m_face(face)
   , m_syncPrefix(syncPrefix)
+  , m_syncKey(syncKey)
   , m_signingId(signingId)
   , m_id(nid)
   , m_onUpdate(onUpdate)
   , m_rng(ndn::random::getRandomNumberEngine())
   , m_packetDist(10, 15)
   , m_retxDist(30000 * 0.9, 30000 * 1.1)
-  , m_intrReplyDist(50 * 0.9, 50 * 1.1)
-  , m_syncAckFreshness(syncAckFreshness)
+  , m_intrReplyDist(200 * 0.9, 200 * 1.1)
   , m_keyChain(keyChain)
-  , m_validator(validator)
+  , m_keyChainMem("pib-memory:", "tpm-memory:")
   , m_scheduler(m_face.getIoService())
   , m_instanceId(s_instanceCounter++)
 {
@@ -61,14 +60,12 @@ Logic::Logic(ndn::Face& face,
   // Register sync interest filter
   m_syncRegisteredPrefix =
     m_face.setInterestFilter(syncPrefix,
-                             [&] (const Name& prefix, const Interest& interest) {
-                                // TODO: verify the sync interest (pseudo-)signature
-                                onSyncInterest(interest);
-                             },
+                             bind(&Logic::onSyncInterest, this, _2),
+                             bind(&Logic::retxSyncInterest, this, true, 0),
                              [] (const Name& prefix, const std::string& msg) {});
 
-  // Start periodically send sync interest
-  retxSyncInterest();
+  // Setup interest signing
+  setSyncKey(m_syncKey);
 }
 
 Logic::~Logic()
@@ -79,31 +76,38 @@ void
 Logic::onSyncInterest(const Interest &interest)
 {
   clogger::getLogger()->log("inbound sync interest", interest);
+  if (m_syncKey != Logic::DEFAULT_SYNC_KEY &&
+      !security::verifySignature(interest, m_keyChainMem.getTpm(),
+                                 m_interestSigningInfo.getSignerName(),
+                                 DigestAlgorithm::SHA256))
+  {
+    return;
+  }
+
   const auto &n = interest.getName();
+
+  // Get state vector
+  std::shared_ptr<VersionVector> vvOther;
+  try
+  {
+    vvOther = make_shared<VersionVector>(n.get(-2));
+  }
+  catch (ndn::tlv::Error&)
+  {
+    return;
+  }
 
   // Merge state vector
   bool myVectorNew, otherVectorNew;
-  VersionVector vvOther(n.get(-1));
-  std::tie(myVectorNew, otherVectorNew) = mergeStateVector(vvOther);
+  std::tie(myVectorNew, otherVectorNew) = mergeStateVector(*vvOther);
 
-#ifdef NDN_SVS_WITH_SYNC_ACK
-  // If my vector newer, send ACK
-  if (myVectorNew)
-    sendSyncAck(n);
-#endif
-
-  // If incoming state identical to local vector, reset timer to delay sending
-  //  next sync interest.
-  // If incoming state different from local vector, send sync interest immediately.
-  // If ACK enabled, do not send interest when local is newer.
-  if (!myVectorNew && !otherVectorNew)
+  // If incoming state identical/newer to local vector, reset timer
+  // If incoming state is older, send sync interest immediately
+  if (!myVectorNew)
   {
-    retxSyncInterest(false);
+    retxSyncInterest(false, 0);
   }
   else
-#ifdef NDN_SVS_WITH_SYNC_ACK
-  if (otherVectorNew)
-#endif
   {
     // Check how much time is left on the timer,
     // reset to ~m_intrReplyDist if more than that.
@@ -116,40 +120,19 @@ Logic::onSyncInterest(const Interest &interest)
 }
 
 void
-Logic::onSyncAck(const Data &data)
-{
-  clogger::getLogger()->log("inbound sync ack", data);
-  VersionVector vvOther(data.getContent().blockFromValue());
-  mergeStateVector(vvOther);
-}
-
-
-void
-Logic::onSyncNack(const Interest &interest, const lp::Nack &nack)
-{
-    clogger::getLogger()->log("sync nack", interest);
-}
-
-void
-Logic::onSyncTimeout(const Interest &interest)
-{
-  clogger::getLogger()->log("sync timeout", interest);
-}
-
-void
-Logic::retxSyncInterest(const bool send, int delay)
+Logic::retxSyncInterest(const bool send, unsigned int delay)
 {
   if (send)
     sendSyncInterest();
 
-  if (delay < 0)
+  if (delay == 0)
     delay = m_retxDist(m_rng);
 
   // Store the scheduled time
   m_nextSyncInterest = getCurrentTime() + 1000 * delay;
 
   m_retxEvent = m_scheduler.schedule(time::milliseconds(delay),
-                                     [this] { retxSyncInterest(); });
+                                     [this] { retxSyncInterest(true, 0); });
 }
 
 void
@@ -166,35 +149,10 @@ Logic::sendSyncInterest()
   interest.setCanBePrefix(true);
   interest.setMustBeFresh(true);
 
+  m_keyChainMem.sign(interest, m_interestSigningInfo);
+
   clogger::getLogger()->log("outbound sync interest", interest);
-  m_face.expressInterest(interest,
-                         std::bind(&Logic::onSyncAck, this, _2),
-                         std::bind(&Logic::onSyncNack, this, _1, _2),
-                         std::bind(&Logic::onSyncTimeout, this, _1));
-}
-
-void
-Logic::sendSyncAck(const Name &n)
-{
-  int delay = m_packetDist(m_rng);
-  m_scheduler.schedule(time::milliseconds(delay), [this, n]
-  {
-    std::shared_ptr<Data> data = std::make_shared<Data>(n);
-    {
-      std::lock_guard<std::mutex> lock(m_vvMutex);
-      data->setContent(m_vv.encode());
-    }
-
-    if (m_signingId.empty())
-      m_keyChain.sign(*data);
-    else
-      m_keyChain.sign(*data, signingByIdentity(m_signingId));
-
-    data->setFreshnessPeriod(m_syncAckFreshness);
-    clogger::getLogger()->log("outbound sync ack", *data);
-
-    m_face.put(*data);
-  });
+  m_face.expressInterest(interest, nullptr, nullptr, nullptr);
 }
 
 std::pair<bool, bool>
@@ -217,6 +175,11 @@ Logic::mergeStateVector(const VersionVector &vvOther)
 
     if (seqCurrent < seqOther)
     {
+      for (unsigned int i=seqCurrent+1; i<=seqOther; i++) {
+        std::ostringstream stream;
+        stream << nidOther << ":" << seqOther;
+        clogger::getLogger()->log("new data", stream.str());
+      }
       otherVectorNew = true;
 
       SeqNo startSeq = m_vv.get(nidOther) + 1;
@@ -276,6 +239,21 @@ Logic::updateSeqNo(const SeqNo& seq, const NodeID& nid)
 
   if (seq > prev)
     sendSyncInterest();
+}
+
+void
+Logic::setSyncKey(const std::string key)
+{
+  m_syncKey = key;
+  m_interestSigningInfo.setSigningHmacKey(m_syncKey);
+  m_interestSigningInfo.setDigestAlgorithm(DigestAlgorithm::SHA256);
+  m_interestSigningInfo.setSignedInterestFormat(security::SignedInterestFormat::V03);
+}
+
+std::string
+Logic::getSyncKey()
+{
+  return m_syncKey;
 }
 
 std::set<NodeID>

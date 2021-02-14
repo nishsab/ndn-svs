@@ -19,9 +19,8 @@
 #include <thread>
 #include <vector>
 
-#include <ndn-cxx/security/validator-config.hpp>
-
 #include <ndn-svs/socket.hpp>
+#include <ndn-cxx/util/random.hpp>
 #include <clogger.h>
 
 class Options
@@ -33,29 +32,29 @@ public:
   std::string prefix;
   std::string m_id;
   int m_stateVectorLogIntervalInMilliseconds = 1000;
-  int averageTimeBetweenPublishesInMilliseconds = 5000;
-  int varianceInTimeBetweenPublishesInMilliseconds = 1000;
+  int averageTimeBetweenPublishesInMilliseconds = 30000;
+  int varianceInTimeBetweenPublishesInMilliseconds = 5000;
 };
 
 class Program
 {
 public:
   Program(const Options &options)
-    : m_options(options)
+    : m_rng(ndn::random::getRandomNumberEngine()),
+      m_sleepTime(options.averageTimeBetweenPublishesInMilliseconds - options.varianceInTimeBetweenPublishesInMilliseconds, options.averageTimeBetweenPublishesInMilliseconds + options.varianceInTimeBetweenPublishesInMilliseconds),
+    m_options(options)
   {
     instanceName = ndn::Name(m_options.m_id).get(-1).toUri();
     clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
     clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
-    m_validator = std::make_shared<ndn::security::ValidatorConfig>(face);
-    m_validator->load("/opt/svs/example-security/validation.conf");
 
     m_svs = std::make_shared<ndn::svs::Socket>(
       ndn::Name(m_options.prefix),
       instanceName,
       face,
       std::bind(&Program::onMissingData, this, _1),
-      ndn::Name(m_options.m_id),
-      m_validator);
+      "dGhpcyBpcyBhIHNlY3JldCBtZXNzYWdl",
+      ndn::Name(m_options.m_id));
 
     //std::cout << "SVS client stared:" << m_options.m_id << std::endl;
   }
@@ -79,7 +78,7 @@ public:
         //std::cout << "Publishing " << message << std::endl;
 
         publishMsg(message);
-        int sleepTimeInMilliseconds = getRandomIntAroundCenter(m_options.averageTimeBetweenPublishesInMilliseconds, m_options.varianceInTimeBetweenPublishesInMilliseconds);
+        int sleepTimeInMilliseconds = m_sleepTime(m_rng);
         usleep(sleepTimeInMilliseconds * 1000);
     }
 
@@ -132,6 +131,8 @@ private:
 
   std::string instanceName;
   volatile bool m_running = false;
+  ndn::random::RandomNumberEngine& m_rng;
+  std::uniform_int_distribution<> m_sleepTime;
 
 
 
@@ -139,7 +140,6 @@ public:
   const Options m_options;
   ndn::Face face;
   std::shared_ptr<ndn::svs::Socket> m_svs;
-  std::shared_ptr<ndn::security::ValidatorConfig> m_validator;
 };
 
 int
