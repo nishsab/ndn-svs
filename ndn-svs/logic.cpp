@@ -100,7 +100,18 @@ Logic::onSyncInterest(const Interest &interest)
   // Merge state vector
   bool myVectorNew, otherVectorNew;
   std::tie(myVectorNew, otherVectorNew) = mergeStateVector(*vvOther);
-
+  mergeAggregate(*vvOther);
+  
+  if (myVectorNew)
+    {
+    setAggregateIfNotRecording(*vvOther);
+    int delay = m_intrReplyDist(m_rng);
+    if (getCurrentTime() + delay * 1000 < m_nextSyncInterest)
+    {
+      retxSyncInterest(false, delay);
+    }
+  }  
+  /*
   // If incoming state identical/newer to local vector, reset timer
   // If incoming state is older, send sync interest immediately
   if (!myVectorNew)
@@ -117,13 +128,21 @@ Logic::onSyncInterest(const Interest &interest)
       retxSyncInterest(false, delay);
     }
   }
+  */
 }
 
 void
 Logic::retxSyncInterest(const bool send, unsigned int delay)
 {
-  if (send)
-    sendSyncInterest();
+  if (send) {
+    bool myVectorNew, otherVectorNew;
+    std::tie(myVectorNew, otherVectorNew) = mergeStateVector(m_aggregatevv);
+    if (myVectorNew) {
+      sendSyncInterest();
+    }
+    m_aggregatevv = VersionVector();
+    recording = false;
+  }
 
   if (delay == 0)
     delay = m_retxDist(m_rng);
@@ -274,6 +293,35 @@ Logic::getCurrentTime() const
   return std::chrono::duration_cast<std::chrono::microseconds>(
     m_steadyClock.now().time_since_epoch()).count();
 }
+
+void
+Logic::mergeAggregate(const VersionVector &vvOther)
+{
+  std::lock_guard<std::mutex> lock(m_vvMutex);
+
+  for (auto entry : vvOther)
+  {
+    NodeID nidOther = entry.first;
+    SeqNo seqOther = entry.second;
+    SeqNo seqCurrent = m_aggregatevv.get(nidOther);
+
+    if (seqCurrent < seqOther)
+    {
+      m_aggregatevv.set(nidOther, seqOther);
+    }
+  }
+}
+
+void
+Logic::setAggregateIfNotRecording(const VersionVector &vvOther) {
+  std::lock_guard<std::mutex> lock(m_vvMutex);
+
+  if (!recording) {
+    recording = true;
+    m_aggregatevv = vvOther;
+  }
+}
+
 
 }  // namespace svs
 }  // namespace ndn

@@ -180,6 +180,12 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::pair<bool, bool>
   mergeStateVector(const VersionVector &vvOther);
 
+  void
+  mergeAggregate(const VersionVector &vvOther);
+
+  void
+  setAggregateIfNotRecording(const VersionVector &vvOther);
+
   /// @brief Reference to scheduler
   ndn::Scheduler&
   getScheduler()
@@ -221,6 +227,8 @@ private:
   // State
   VersionVector m_vv;
   mutable std::mutex m_vvMutex;
+  bool recording = false;
+  VersionVector m_aggregatevv;
 
   // Random Engine
   ndn::random::RandomNumberEngine& m_rng;

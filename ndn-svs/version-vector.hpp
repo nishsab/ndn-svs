@@ -89,6 +89,11 @@ public:
   {
     return m_map.find(nid) != end();
   }
+
+  bool isEmpty()
+  {
+    return m_map.empty();
+  }
 private:
   std::map<NodeID, SeqNo> m_map;
 };
