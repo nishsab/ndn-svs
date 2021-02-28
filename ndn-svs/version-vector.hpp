@@ -54,6 +54,10 @@ public:
   ndn::Block
   encode() const;
 
+  /** Encode the version vector to a string */
+  std::vector<ndn::Block>
+  encodeIntoChunks(int chunkSize) const;
+
   /** Get a human-readable representation */
   std::string
   toStr() const;

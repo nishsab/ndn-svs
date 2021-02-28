@@ -168,6 +168,11 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   void
   sendSyncInterest();
 
+  void
+  option1AllChunks();
+
+  std::vector<ndn::Block> getAllEncodings();
+
   /**
    * @brief Merge state vector into the current
    *

@@ -185,6 +185,43 @@ Logic::sendSyncInterest()
   m_face.expressInterest(interest, nullptr, nullptr, nullptr);
 }
 
+std::vector<ndn::Block>
+Logic::getAllEncodings()
+{
+  std::lock_guard<std::mutex> lock(m_vvMutex);
+  return m_vv.encodeIntoChunks(500);
+}
+
+void
+Logic::option1AllChunks() {
+  std::vector<ndn::Block> blocks = getAllEncodings();
+
+  for (ndn::Block block : blocks) {
+    Name syncName(m_syncPrefix);
+
+    Interest interest(syncName, time::milliseconds(1000));
+    interest.setCanBePrefix(true);
+    interest.setMustBeFresh(true);
+
+    switch (m_securityOptions.interestSigningInfo.getSignerType()) {
+      case security::SigningInfo::SIGNER_TYPE_NULL:
+        interest.setName(syncName.appendNumber(0));
+        break;
+
+      case security::SigningInfo::SIGNER_TYPE_HMAC:
+        m_keyChainMem.sign(interest, m_securityOptions.interestSigningInfo);
+        break;
+
+      default:
+        m_keyChain.sign(interest, m_securityOptions.interestSigningInfo);
+        break;
+    }
+
+    clogger::getLogger()->log("outbound sync interest", interest);
+    m_face.expressInterest(interest, nullptr, nullptr, nullptr);
+  }
+}
+
 std::pair<bool, bool>
 Logic::mergeStateVector(const VersionVector &vvOther)
 {
