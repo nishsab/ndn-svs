@@ -18,7 +18,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-
+#include <ndn-svs/socket-shared.hpp>
 #include <ndn-svs/socket.hpp>
 #include <ndn-cxx/util/random.hpp>
 #include <clogger.h>
@@ -32,8 +32,8 @@ public:
   std::string prefix;
   std::string m_id;
   int m_stateVectorLogIntervalInMilliseconds = 1000;
-  int averageTimeBetweenPublishesInMilliseconds = 30000;
-  int varianceInTimeBetweenPublishesInMilliseconds = 5000;
+  int averageTimeBetweenPublishesInMilliseconds = 5000;
+  int varianceInTimeBetweenPublishesInMilliseconds = 1000;
 };
 
 class Program
@@ -48,14 +48,22 @@ public:
     clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
     clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
 
-    m_svs = std::make_shared<ndn::svs::Socket>(
+    ndn::svs::SecurityOptions securityOptions;
+    securityOptions.interestSigningInfo.setSigningHmacKey("dGhpcyBpcyBhIHNlY3JldCBtZXNzYWdl");
+
+    // Create socket with shared prefix
+    auto svs = std::make_shared<ndn::svs::SocketShared>(
       ndn::Name(m_options.prefix),
-      instanceName,
+      //ndn::Name(m_options.m_id).get(-1).toUri(),
+      m_options.m_id,
       face,
       std::bind(&Program::onMissingData, this, _1),
-      "dGhpcyBpcyBhIHNlY3JldCBtZXNzYWdl",
-      ndn::Name(m_options.m_id));
+      securityOptions);
 
+    // Cache data from all nodes
+    svs->setCacheAll(true);
+    m_svs = svs;
+    
     //std::cout << "SVS client stared:" << m_options.m_id << std::endl;
   }
 
@@ -139,7 +147,7 @@ private:
 public:
   const Options m_options;
   ndn::Face face;
-  std::shared_ptr<ndn::svs::Socket> m_svs;
+  std::shared_ptr<ndn::svs::SocketBase> m_svs;
 };
 
 int
