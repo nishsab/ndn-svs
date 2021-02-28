@@ -18,10 +18,11 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <ndn-svs/socket-shared.hpp>
 #include <ndn-svs/socket.hpp>
 #include <ndn-cxx/util/random.hpp>
 #include <clogger.h>
+#include <chrono>
+#include <sys/time.h>
 
 class Options
 {
@@ -32,8 +33,6 @@ public:
   std::string prefix;
   std::string m_id;
   int m_stateVectorLogIntervalInMilliseconds = 1000;
-  int averageTimeBetweenPublishesInMilliseconds = 5000;
-  int varianceInTimeBetweenPublishesInMilliseconds = 1000;
 };
 
 class Program
@@ -41,7 +40,8 @@ class Program
 public:
   Program(const Options &options)
     : m_rng(ndn::random::getRandomNumberEngine()),
-      m_sleepTime(options.averageTimeBetweenPublishesInMilliseconds - options.varianceInTimeBetweenPublishesInMilliseconds, options.averageTimeBetweenPublishesInMilliseconds + options.varianceInTimeBetweenPublishesInMilliseconds),
+      m_sleepTime(300.0),
+      runTimeInMillseconds(10*60*1000),
     m_options(options)
   {
     instanceName = ndn::Name(m_options.m_id).get(-1).toUri();
@@ -67,6 +67,12 @@ public:
     //std::cout << "SVS client stared:" << m_options.m_id << std::endl;
   }
 
+  long currentTimeMills() {
+    struct timeval tp;
+    gettimeofday(&tp, NULL);
+    return tp.tv_sec * 1000 + tp.tv_usec / 1000;
+  }
+
   void
   run()
   {
@@ -77,16 +83,23 @@ public:
     std::string init_msg = "User " + m_options.m_id + " has joined the groupchat";
     publishMsg(init_msg);
 
-    std::string userInput = "";
+    long endTime = currentTimeMills() + runTimeInMillseconds;
 
-    for (int i=0; i<24; i++) {
+    int i=0;
+    while (currentTimeMills() < endTime) {
         std::ostringstream ss = std::ostringstream();
         ss << m_options.m_id << ": message " << i;
+        i++;
         std::string message = ss.str();
         //std::cout << "Publishing " << message << std::endl;
 
         publishMsg(message);
-        int sleepTimeInMilliseconds = m_sleepTime(m_rng);
+        clogger::getLogger()->log("publish", message);
+        int sleepTimeInMilliseconds = m_sleepTime(m_rng) * 1000;
+        long timeRemaining = endTime - currentTimeMills();
+        if (timeRemaining < sleepTimeInMilliseconds) {
+          sleepTimeInMilliseconds = timeRemaining;
+        }
         usleep(sleepTimeInMilliseconds * 1000);
     }
 
@@ -132,15 +145,11 @@ private:
                        ndn::time::milliseconds(1000));
   }
 
-  int getRandomIntAroundCenter(int center, int interval) {
-    int delta = rand() % (2*interval + 1);
-    return center - interval + delta;
-  }
-
   std::string instanceName;
   volatile bool m_running = false;
   ndn::random::RandomNumberEngine& m_rng;
-  std::uniform_int_distribution<> m_sleepTime;
+  std::poisson_distribution<> m_sleepTime;
+  long runTimeInMillseconds;
 
 
 
