@@ -16,28 +16,33 @@
 
 #include "chat.hpp"
 
-#include <ndn-svs/socket.hpp>
+#include <ndn-svs/socket-shared.hpp>
 
-class ProgramPrefix : public Program
+class ProgramShared: public Program
 {
 public:
-  ProgramPrefix(const Options &options) : Program(options)
+  ProgramShared(const Options &options) : Program(options)
   {
     // Use HMAC signing
     ndn::svs::SecurityOptions securityOptions;
     securityOptions.interestSigningInfo.setSigningHmacKey("dGhpcyBpcyBhIHNlY3JldCBtZXNzYWdl");
 
-    m_svs = std::make_shared<ndn::svs::Socket>(
+    // Create socket with shared prefix
+    auto svs = std::make_shared<ndn::svs::SocketShared>(
       ndn::Name(m_options.prefix),
-      ndn::Name(m_options.m_id),
+      ndn::Name(m_options.m_id).get(-1).toUri(),
       face,
-      std::bind(&ProgramPrefix::onMissingData, this, _1),
+      std::bind(&ProgramShared::onMissingData, this, _1),
       securityOptions);
+
+    // Cache data from all nodes
+    svs->setCacheAll(true);
+    m_svs = svs;
   }
 };
 
 int
 main(int argc, char **argv)
 {
-  return callMain<ProgramPrefix>(argc, argv);
+  return callMain<ProgramShared>(argc, argv);
 }

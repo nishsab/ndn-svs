@@ -1,8 +1,6 @@
 # ndn-svs: State Vector Sync library for distributed realtime applications for NDN
 
-This library implements the State Vector Sync (SVS) protocol to synchronise state between multiple clients over NDN.
-
-**This is NOT an official implementation**.
+This library implements the [State Vector Sync (SVS)](https://named-data.github.io/StateVectorSync/) protocol to synchronise state between multiple clients over NDN.
 
 ndn-svs uses the [ndn-cxx](https://github.com/named-data/ndn-cxx) library.
 
@@ -45,7 +43,7 @@ If you are new to the NDN software community, please read the
 [Contributor's Guide](https://github.com/named-data/.github/blob/master/CONTRIBUTING.md)
 to get started.
 
-Since ndn-svs is an unofficial implementation, contributions are welcome through GitHub.
+Contributions are welcome through GitHub.
 
 ## License
 

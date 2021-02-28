@@ -19,6 +19,7 @@
 
 #include "common.hpp"
 #include "version-vector.hpp"
+#include "security-options.hpp"
 
 #include <ndn-cxx/util/random.hpp>
 
@@ -72,15 +73,13 @@ public:
    * @param syncPrefix The prefix of the sync group
    * @param onUpdate The callback function to handle state updates
    * @param syncKey Base64 encoded key to sign sync interests
-   * @param signingId The signing Id of the default user
    * @param nid ID for the node
    */
   Logic(ndn::Face& face,
         ndn::KeyChain& keyChain,
         const Name& syncPrefix,
         const UpdateCallback& onUpdate,
-        const std::string& syncKey = DEFAULT_SYNC_KEY,
-        const Name& signingId = DEFAULT_NAME,
+        const SecurityOptions& securityOptions = SecurityOptions::DEFAULT,
         const NodeID nid = EMPTY_NODE_ID);
 
   ~Logic();
@@ -126,17 +125,16 @@ public:
   void
   updateSeqNo(const SeqNo& seq, const NodeID& nid = EMPTY_NODE_ID);
 
-  /// @brief Set the sync interest signing key (base64)
-  void
-  setSyncKey(const std::string key);
-
-  /// @brief Get the sync interest signing key (base64)
-  std::string
-  getSyncKey();
-
   /// @brief Get the name of all sessions
   std::set<NodeID>
   getSessionNames() const;
+
+  /// @brief Get current version vector
+  VersionVector&
+  getState()
+  {
+    return m_vv;
+  }
 
   /// @brief Get human-readable representation of version vector
   std::string
@@ -148,6 +146,9 @@ public:
 NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   void
   onSyncInterest(const Interest &interest);
+
+  void
+  onSyncInterestValidated(const Interest &interest);
 
   /**
    * @brief sendSyncInterest and schedule a new retxSyncInterest event.
@@ -184,8 +185,9 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
    * @brief Record vector by merging it into m_recordedVv
    *
    * @param vvOther state vector to merge in
+   * @returns if recorded successfully
    */
-  void
+  bool
   recordVector(const VersionVector &vvOther);
 
   /**
@@ -197,7 +199,7 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
    * @param vvOther first vector to record
    */
   void
-  enterSuppressionState(const VersionVector &vvOther);  
+  enterSuppressionState(const VersionVector &vvOther);
 
   /// @brief Reference to scheduler
   ndn::Scheduler&
@@ -206,21 +208,12 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
     return m_scheduler;
   }
 
-  /// @brief Get current version vector
-  VersionVector&
-  getState()
-  {
-    return m_vv;
-  }
-
   /// @brief Get the current time in microseconds with arbitrary reference
   long
   getCurrentTime() const;
 
 public:
-  static const ndn::Name DEFAULT_NAME;
   static const NodeID EMPTY_NODE_ID;
-  static const std::string DEFAULT_SYNC_KEY;
 
 private:
   static const ConstBufferPtr EMPTY_DIGEST;
@@ -229,21 +222,18 @@ private:
 
   // Communication
   ndn::Face& m_face;
-  Name m_syncPrefix;
-  std::string m_syncKey;
-  Name m_signingId;
-  NodeID m_id;
+  const Name m_syncPrefix;
+  const SecurityOptions m_securityOptions;
+  const NodeID m_id;
   ndn::ScopedRegisteredPrefixHandle m_syncRegisteredPrefix;
 
-  UpdateCallback m_onUpdate;
+  const UpdateCallback m_onUpdate;
 
   // State
   VersionVector m_vv;
   mutable std::mutex m_vvMutex;
-  // If recording (in suppression state)
-  bool m_recording = false;
-  // aggregates incoming vectors while in suppression state
-  VersionVector m_recordedVv;
+  // Aggregates incoming vectors while in suppression state
+  std::unique_ptr<VersionVector> m_recordedVv = nullptr;
 
   // Random Engine
   ndn::random::RandomNumberEngine& m_rng;
@@ -257,7 +247,6 @@ private:
   // Security
   ndn::KeyChain& m_keyChain;
   ndn::KeyChain m_keyChainMem;
-  security::SigningInfo m_interestSigningInfo;
 
   ndn::Scheduler m_scheduler;
   scheduler::ScopedEventId m_retxEvent;

@@ -14,33 +14,35 @@
  * PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
  */
 
-#ifndef NDN_SVS_COMMON_HPP
-#define NDN_SVS_COMMON_HPP
+#ifndef NDN_SVS_SIGNING_OPTIONS_HPP
+#define NDN_SVS_SIGNING_OPTIONS_HPP
 
-#include "config.hpp"
+#include "common.hpp"
 
-#include <ndn-cxx/util/scheduler.hpp>
-#include <ndn-cxx/security/validator.hpp>
-#include <ndn-cxx/face.hpp>
-
-#ifdef NDN_SVS_HAVE_TESTS
-#define NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE public
-#else
-#define NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE private
-#endif
-
-#include<iostream>
 namespace ndn {
 namespace svs {
 
-// Type and constant declarations for State Vector Sync (SVS)
-using NodeID = std::string;
-using SeqNo = uint64_t;
+struct SecurityOptions
+{
+  /** Signing options for sync interests */
+  security::SigningInfo interestSigningInfo;
+  /** Signing options for data packets */
+  security::SigningInfo dataSigningInfo;
 
-using ndn::security::ValidationError;
-using ndn::security::Validator;
+  /** Validator to validate data and interests (unless using HMAC) */
+  const std::shared_ptr<Validator> validator = DEFAULT_VALIDATOR;
+
+  static const SecurityOptions DEFAULT;
+  static const std::shared_ptr<Validator> DEFAULT_VALIDATOR;
+
+  SecurityOptions()
+  {
+    // Set defaults
+    interestSigningInfo.setSignedInterestFormat(security::SignedInterestFormat::V03);
+  }
+};
 
 }  // namespace svs
 }  // namespace ndn
 
-#endif // NDN_SVS_COMMON_HPP
+#endif // NDN_SVS_SIGNING_OPTIONS_HPP

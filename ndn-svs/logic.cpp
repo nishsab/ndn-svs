@@ -25,21 +25,17 @@ namespace svs {
 
 int Logic::s_instanceCounter = 0;
 
-const ndn::Name Logic::DEFAULT_NAME;
 const NodeID Logic::EMPTY_NODE_ID;
-const std::string Logic::DEFAULT_SYNC_KEY;
 
 Logic::Logic(ndn::Face& face,
              ndn::KeyChain& keyChain,
              const Name& syncPrefix,
              const UpdateCallback& onUpdate,
-             const std::string& syncKey,
-             const Name& signingId,
+             const SecurityOptions& securityOptions,
              const NodeID nid)
   : m_face(face)
   , m_syncPrefix(syncPrefix)
-  , m_syncKey(syncKey)
-  , m_signingId(signingId)
+  , m_securityOptions(securityOptions)
   , m_id(nid)
   , m_onUpdate(onUpdate)
   , m_rng(ndn::random::getRandomNumberEngine())
@@ -51,21 +47,12 @@ Logic::Logic(ndn::Face& face,
   , m_scheduler(m_face.getIoService())
   , m_instanceId(s_instanceCounter++)
 {
-  m_vv.set(m_id, 0);
-
-  // Use default identity if not specified
-  if (m_signingId == Logic::DEFAULT_NAME)
-    m_signingId = m_keyChain.getPib().getDefaultIdentity().getName();
-
   // Register sync interest filter
   m_syncRegisteredPrefix =
     m_face.setInterestFilter(syncPrefix,
                              bind(&Logic::onSyncInterest, this, _2),
                              bind(&Logic::retxSyncInterest, this, true, 0),
                              [] (const Name& prefix, const std::string& msg) {});
-
-  // Setup interest signing
-  setSyncKey(m_syncKey);
 }
 
 Logic::~Logic()
@@ -76,14 +63,33 @@ void
 Logic::onSyncInterest(const Interest &interest)
 {
   clogger::getLogger()->log("inbound sync interest", interest);
-  if (m_syncKey != Logic::DEFAULT_SYNC_KEY &&
-      !security::verifySignature(interest, m_keyChainMem.getTpm(),
-                                 m_interestSigningInfo.getSignerName(),
-                                 DigestAlgorithm::SHA256))
+  switch (m_securityOptions.interestSigningInfo.getSignerType())
   {
-    return;
-  }
+    case security::SigningInfo::SIGNER_TYPE_NULL:
+      onSyncInterestValidated(interest);
+      return;
 
+    case security::SigningInfo::SIGNER_TYPE_HMAC:
+      if (security::verifySignature(interest, m_keyChainMem.getTpm(),
+                                    m_securityOptions.interestSigningInfo.getSignerName(),
+                                    DigestAlgorithm::SHA256))
+        onSyncInterestValidated(interest);
+      return;
+
+    default:
+      if (static_cast<bool>(m_securityOptions.validator))
+        m_securityOptions.validator->validate(interest,
+                                              bind(&Logic::onSyncInterestValidated, this, _1),
+                                              nullptr);
+      else
+        onSyncInterestValidated(interest);
+      return;
+  }
+}
+
+void
+Logic::onSyncInterestValidated(const Interest &interest)
+{
   const auto &n = interest.getName();
 
   // Get state vector
@@ -101,12 +107,9 @@ Logic::onSyncInterest(const Interest &interest)
   bool myVectorNew, otherVectorNew;
   std::tie(myVectorNew, otherVectorNew) = mergeStateVector(*vvOther);
 
-  // Only record while in suppression state
-  if (m_recording)
-  {
-    recordVector(*vvOther);
+  // Try to record; the call will check if in suppression state
+  if (recordVector(*vvOther))
     return;
-  }
 
   // If incoming state identical/newer to local vector, reset timer
   // If incoming state is older, send sync interest immediately
@@ -134,11 +137,9 @@ Logic::retxSyncInterest(const bool send, unsigned int delay)
   {
     // Only send interest if in steady state or local vector has newer state
     // than recorded interests
-    bool myVectorNew, otherVectorNew;
-    std::tie(myVectorNew, otherVectorNew) = mergeStateVector(m_recordedVv);
-    if (!m_recording || myVectorNew)
+    if (!m_recordedVv || mergeStateVector(*m_recordedVv).first)
       sendSyncInterest();
-    m_recording = false;
+    m_recordedVv = nullptr;
   }
 
   if (delay == 0)
@@ -165,7 +166,20 @@ Logic::sendSyncInterest()
   interest.setCanBePrefix(true);
   interest.setMustBeFresh(true);
 
-  m_keyChainMem.sign(interest, m_interestSigningInfo);
+  switch (m_securityOptions.interestSigningInfo.getSignerType())
+  {
+    case security::SigningInfo::SIGNER_TYPE_NULL:
+      interest.setName(syncName.appendNumber(0));
+      break;
+
+    case security::SigningInfo::SIGNER_TYPE_HMAC:
+      m_keyChainMem.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+
+    default:
+      m_keyChain.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+  }
 
   clogger::getLogger()->log("outbound sync interest", interest);
   m_face.expressInterest(interest, nullptr, nullptr, nullptr);
@@ -257,21 +271,6 @@ Logic::updateSeqNo(const SeqNo& seq, const NodeID& nid)
     retxSyncInterest(true, 0);
 }
 
-void
-Logic::setSyncKey(const std::string key)
-{
-  m_syncKey = key;
-  m_interestSigningInfo.setSigningHmacKey(m_syncKey);
-  m_interestSigningInfo.setDigestAlgorithm(DigestAlgorithm::SHA256);
-  m_interestSigningInfo.setSignedInterestFormat(security::SignedInterestFormat::V03);
-}
-
-std::string
-Logic::getSyncKey()
-{
-  return m_syncKey;
-}
-
 std::set<NodeID>
 Logic::getSessionNames() const
 {
@@ -291,32 +290,35 @@ Logic::getCurrentTime() const
     m_steadyClock.now().time_since_epoch()).count();
 }
 
-void
+bool
 Logic::recordVector(const VersionVector &vvOther)
 {
+  if (!m_recordedVv) return false;
+
   std::lock_guard<std::mutex> lock(m_vvMutex);
 
   for (auto entry : vvOther)
   {
     NodeID nidOther = entry.first;
     SeqNo seqOther = entry.second;
-    SeqNo seqCurrent = m_recordedVv.get(nidOther);
+    SeqNo seqCurrent = m_recordedVv->get(nidOther);
 
     if (seqCurrent < seqOther)
     {
-      m_recordedVv.set(nidOther, seqOther);
+      m_recordedVv->set(nidOther, seqOther);
     }
   }
+
+  return true;
 }
 
 void
-Logic::enterSuppressionState(const VersionVector &vvOther) {
+Logic::enterSuppressionState(const VersionVector &vvOther)
+{
   std::lock_guard<std::mutex> lock(m_vvMutex);
 
-  if (!m_recording) {
-    m_recording = true;
-    m_recordedVv = vvOther;
-  }
+  if (!m_recordedVv)
+    m_recordedVv = make_unique<VersionVector>(vvOther);
 }
 
 }  // namespace svs

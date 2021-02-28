@@ -17,105 +17,60 @@
 #ifndef NDN_SVS_SOCKET_HPP
 #define NDN_SVS_SOCKET_HPP
 
-#include "common.hpp"
-#include "logic.hpp"
-#include "store.hpp"
+#include "socket-base.hpp"
 
 namespace ndn {
 namespace svs {
 
 /**
- * @brief A simple interface to interact with client code
+ * @brief Socket using arbitrary prefix for data delivery
  *
- * Though it is called Socket, it is not a real socket. It just trying to provide
- * a simplified interface for data publishing and fetching.
- *
- * This interface simplify data publishing.  Client can simply dump raw data
- * into this interface without handling the SVS specific details, such
- * as sequence number and session id.
- *
- * The socket will throw if signingId does not exist.
- *
- * This interface also simplifies data fetching.  Client only needs to provide a
- * data fetching strategy (through a updateCallback).
- *
- * @param syncPrefix The prefix of the sync group
- * @param id ID for the node
- * @param face The face used to communication
- * @param updateCallback The callback function to handle state updates
- * @param syncKey Base64 encoded key to sign sync interests
- * @param signingId The signing Id used to sign data packets
- * @param validator The validator for packet validation
- * @param dataStore Interface to store data packets
+ * The data prefix acts as the node ID in the version vector
+ * Sync logic runs under <sync-prefix>
+ * Data is produced as <data-prefix>/<sync-prefix>/<seq>
  */
-class Socket : noncopyable
+class Socket : public SocketBase
 {
 public:
   Socket(const Name& syncPrefix,
-         const NodeID& id,
+         const Name& nodePrefix,
          ndn::Face& face,
          const UpdateCallback& updateCallback,
-         const std::string& syncKey = Logic::DEFAULT_SYNC_KEY,
-         const Name& signingId = DEFAULT_NAME,
-         std::shared_ptr<Validator> validator = DEFAULT_VALIDATOR,
-         std::shared_ptr<DataStore> dataStore = nullptr);
+         const SecurityOptions& securityOptions = SecurityOptions::DEFAULT,
+         std::shared_ptr<DataStore> dataStore = DEFAULT_DATASTORE)
+  : SocketBase(
+      syncPrefix,
+      Name(nodePrefix).append(syncPrefix),
+      nodePrefix.toUri(),
+      face, updateCallback, securityOptions, dataStore)
+  {}
 
-  ~Socket();
-
-  using DataValidatedCallback = function<void(const Data&)>;
-
-  using DataValidationErrorCallback = function<void(const Data&, const ValidationError& error)> ;
-
-  /**
-   * @brief Publish a data packet in the session and trigger synchronization updates
-   *
-   * This method will create a data packet with the supplied content.
-   * The packet name is the local session + seqNo.
-   * The seqNo is set by the application.
-   *
-   * @param buf Pointer to the bytes in content
-   * @param len size of the bytes in content
-   * @param freshness FreshnessPeriod of the data packet.
-   * @param seqNo Sequence number of the data
-   * @param id NodeID to publish the data under
-   */
-  void
-  publishData(const uint8_t* buf, size_t len, const ndn::time::milliseconds& freshness,
-              const uint64_t& seqNo = 0, const NodeID id = EMPTY_NODE_ID);
+  Name
+  getDataName(const NodeID& nid, const SeqNo& seqNo)
+  {
+    return Name(nid).append(m_syncPrefix).appendNumber(seqNo);
+  }
 
   /**
-   * @brief Publish a data packet in the session and trigger synchronization updates
+   * @brief Retrive a data packet with a particular seqNo from a node
    *
-   * This method will create a data packet with the supplied content.
-   * The packet name is the local session + seqNo.
-   * The seqNo is set by the application.
-   *
-   * @param content Block that will be set as the content of the data packet.
-   * @param freshness FreshnessPeriod of the data packet.
-   * @param seqNo Sequence number of the data
-   * @param id NodeID to publish the data under
-   */
-  void
-  publishData(const Block& content, const ndn::time::milliseconds& freshness,
-              const uint64_t& seqNo = 0, const NodeID id = EMPTY_NODE_ID);
-
-  /**
-   * @brief Retrive a data packet with a particular seqNo from a session
-   *
-   * @param sessionName The name of the target session.
+   * @param nodePrefix Node prefix of the target node
    * @param seq The seqNo of the data packet.
    * @param onValidated The callback when the retrieved packet has been validated.
    * @param nRetries The number of retries.
    */
   void
-  fetchData(const NodeID& nid, const SeqNo& seq,
+  fetchData(const Name& nodePrefix, const SeqNo& seq,
             const DataValidatedCallback& onValidated,
-            int nRetries = 0);
+            int nRetries = 0)
+  {
+    return fetchData(nodePrefix.toUri(), seq, onValidated, nRetries);
+  }
 
   /**
-   * @brief Retrive a data packet with a particular seqNo from a session
+   * @brief Retrive a data packet with a particular seqNo from a node
    *
-   * @param sessionName The name of the target session.
+   * @param nodePrefix Node prefix of the target node
    * @param seq The seqNo of the data packet.
    * @param onValidated The callback when the retrieved packet has been validated.
    * @param onValidationFailed The callback when the retrieved packet failed validation.
@@ -123,79 +78,14 @@ public:
    * @param nRetries The number of retries.
    */
   void
-  fetchData(const NodeID& nid, const SeqNo& seq,
+  fetchData(const Name& nodePrefix, const SeqNo& seq,
             const DataValidatedCallback& onValidated,
             const DataValidationErrorCallback& onValidationFailed,
             const TimeoutCallback& onTimeout,
-            int nRetries = 0);
-
-  /*** @brief Get the underlying data store */
-  DataStore&
-  getDataStore()
+            int nRetries = 0)
   {
-    return *m_dataStore;
+    return fetchData(nodePrefix.toUri(), seq, onValidated, onValidationFailed, onTimeout, nRetries);
   }
-
-  /*** @brief Set whether data of other nodes is also cached and served */
-  void
-  setCacheAll(bool val)
-  {
-    m_cacheAll = val;
-  }
-
-  /*** @brief Get the underlying SVS logic */
-  Logic&
-  getLogic()
-  {
-    return m_logic;
-  }
-
-public:
-  static const ndn::Name DEFAULT_NAME;
-  static const std::shared_ptr<Validator> DEFAULT_VALIDATOR;
-  static const NodeID EMPTY_NODE_ID;
-
-private:
-  void
-  onDataInterest(const Interest &interest);
-
-  void
-  onData(const Interest& interest, const Data& data,
-         const DataValidatedCallback& dataCallback,
-         const DataValidationErrorCallback& failCallback);
-
-  void
-  onDataTimeout(const Interest& interest, int nRetries,
-                const DataValidatedCallback& dataCallback,
-                const DataValidationErrorCallback& failCallback,
-                const TimeoutCallback& timeoutCallback);
-
-  void
-  onDataValidated(const Data& data,
-                  const DataValidatedCallback& dataCallback);
-
-  void
-  onDataValidationFailed(const Data& data,
-                         const ValidationError& error);
-
-private:
-  Name m_syncPrefix;
-  Name m_dataPrefix;
-  Name m_signingId;
-  NodeID m_id;
-  Face& m_face;
-  KeyChain m_keyChain;
-
-  ndn::ScopedRegisteredPrefixHandle m_registeredDataPrefix;
-
-  std::shared_ptr<Validator> m_validator;
-
-  UpdateCallback m_onUpdate;
-
-  std::shared_ptr<DataStore> m_dataStore;
-  bool m_cacheAll = false;
-
-  Logic m_logic;
 };
 
 }  // namespace svs
