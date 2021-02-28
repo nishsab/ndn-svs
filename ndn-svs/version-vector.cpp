@@ -60,44 +60,42 @@ VersionVector::encode() const
   return enc.block();
 }
 
+ndn::Block
+VersionVector::encodeUpTo(std::reverse_iterator<std::__map_const_iterator<std::__tree_const_iterator<std::__value_type<std::basic_string<char>, unsigned long long int>, std::__tree_node<std::__value_type<std::basic_string<char>, unsigned long long int>, void *> *, long>>> *it, size_t chunkSize) const
+{
+  ndn::encoding::Encoder enc;
+
+  size_t totalLength = 0;
+
+  for (; *it != m_map.rend() && totalLength + 100 < chunkSize; it++)
+  {
+    size_t valLength = enc.prependNonNegativeInteger((*it)->second);
+    totalLength += enc.prependVarNumber(valLength);
+    totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+    totalLength += valLength;
+
+    totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                             reinterpret_cast<const uint8_t*>((*it)->first.c_str()), (*it)->first.size());
+  }
+
+  totalLength += enc.prependVarNumber(totalLength);
+  totalLength += enc.prependVarNumber(tlv::VersionVector);
+
+  return enc.block();
+}
+
 std::vector<ndn::Block>
 VersionVector::encodeIntoChunks(int chunkSize) const {
+  std::vector<ndn::Block> blocks;
   if (m_map.empty()) {
-    std::vector<ndn::Block> blocks;
     blocks.push_back(encode());
     return blocks;
   } else {
-    ndn::encoding::Encoder *enc = NULL;
-    std::vector<ndn::Block> blocks;
-
-    size_t totalLength = 0;
-
     for (auto it = m_map.rbegin(); it != m_map.rend(); it++) {
-      if (!enc || totalLength + 100 > chunkSize) {
-        if (enc) {
-          totalLength += enc->prependVarNumber(totalLength);
-          totalLength += enc->prependVarNumber(tlv::VersionVector);
-          blocks.push_back(enc->block());
-
-          delete enc;
-        }
-        enc = new ndn::encoding::Encoder();
-        totalLength = 0;
-      }
-
-      size_t valLength = enc->prependNonNegativeInteger(it->second);
-      totalLength += enc->prependVarNumber(valLength);
-      totalLength += enc->prependVarNumber(tlv::VersionVectorValue);
-      totalLength += valLength;
-      totalLength += enc->prependByteArrayBlock(tlv::VersionVectorKey,
-                                                reinterpret_cast<const uint8_t *>(it->first.c_str()), it->first.size());
+      blocks.push_back(encodeUpTo(&it, chunkSize));
     }
-    blocks.push_back(enc->block());
-    totalLength += enc->prependVarNumber(totalLength);
-    totalLength += enc->prependVarNumber(tlv::VersionVector);
-    delete enc;
-    return blocks;
   }
+  return blocks;
 }
 
 std::string

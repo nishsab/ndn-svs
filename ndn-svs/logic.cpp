@@ -138,7 +138,7 @@ Logic::retxSyncInterest(const bool send, unsigned int delay)
     // Only send interest if in steady state or local vector has newer state
     // than recorded interests
     if (!m_recordedVv || mergeStateVector(*m_recordedVv).first)
-      sendSyncInterest();
+      option1AllChunks();
     m_recordedVv = nullptr;
   }
 
