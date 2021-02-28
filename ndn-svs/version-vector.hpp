@@ -96,9 +96,7 @@ public:
   }
 private:
   std::map<NodeID, SeqNo> m_map;
-  Block encodeUpTo(
-            std::reverse_iterator<std::__map_const_iterator<std::__tree_const_iterator<std::__value_type<std::basic_string<char>, unsigned long long int>, std::__tree_node<std::__value_type<std::basic_string<char>, unsigned long long int>, void *> *, long>>> *it,
-            size_t chunkSize) const;
+  Block encodeUpTo(std::reverse_iterator<const_iterator> *it, size_t chunkSize) const;
 };
 
 } // namespace ndn
