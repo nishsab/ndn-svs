@@ -32,6 +32,10 @@ def options(opt):
                       help='Build unit tests')
     optgrp.add_option('--with-examples', action='store_true', default=False,
                       help='Build examples')
+    optgrp.add_option('--option1-all-chunks', action='store_true', default=False,
+                      help='Send all chunks in sync interest')
+    optgrp.add_option('--option2-just-latest', action='store_true', default=False,
+                      help='Only use latest seq nos in sync interest')
 
 def configure(conf):
     conf.start_msg('Building static library')
@@ -79,6 +83,8 @@ def configure(conf):
     conf.env.prepend_value('STLIBPATH', ['.'])
 
     conf.define_cond('NDN_SVS_HAVE_TESTS', conf.env.WITH_TESTS)
+    conf.define_cond('OPTION1_ALL_CHUNKS', conf.options.option1_all_chunks)
+    conf.define_cond('OPTION2_JUST_LATEST', conf.options.option2_just_latest)
 
     # The config header will contain all defines that were added using conf.define()
     # or conf.define_cond().  Everything that was added directly to conf.env.DEFINES
