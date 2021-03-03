@@ -85,7 +85,7 @@ VersionVector::encodeMap(std::map<NodeID, SeqNo> local_map) const
 }
 
 std::vector<ndn::Block>
-VersionVector::encodeIntoChunks(int chunkSize) const {
+VersionVector::encodeIntoChunks(u_int64_t chunkSize) const {
   std::vector<ndn::Block> blocks;
   if (m_map.empty()) {
     blocks.push_back(encode());
@@ -108,7 +108,7 @@ VersionVector::encodeIntoChunks(int chunkSize) const {
 }
 
 ndn::Block
-VersionVector::encodeMostRecent(int chunkSize) const {
+VersionVector::encodeMostRecent(u_int64_t chunkSize) const {
   ndn::encoding::Encoder enc;
 
   size_t totalLength = 0;

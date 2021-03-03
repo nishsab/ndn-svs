@@ -56,10 +56,10 @@ public:
 
 
   std::vector<ndn::Block>
-  encodeIntoChunks(int chunkSize) const;
+  encodeIntoChunks(u_int64_t chunkSize) const;
 
   ndn::Block
-  encodeMostRecent(int chunkSize) const;
+  encodeMostRecent(u_int64_t chunkSize) const;
 
   /** Get a human-readable representation */
   std::string
