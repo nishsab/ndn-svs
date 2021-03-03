@@ -140,6 +140,7 @@ public:
   std::string
   getStateStr() const
   {
+    std::lock_guard<std::mutex> lock(m_vvMutex);
     return m_vv.toStr();
   }
 
@@ -170,6 +171,9 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
 
   void
   option1AllChunks();
+
+  void
+  option2JustLatest();
 
   std::vector<ndn::Block> getAllEncodings();
 

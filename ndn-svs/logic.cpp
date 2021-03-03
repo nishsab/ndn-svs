@@ -137,8 +137,15 @@ Logic::retxSyncInterest(const bool send, unsigned int delay)
   {
     // Only send interest if in steady state or local vector has newer state
     // than recorded interests
-    if (!m_recordedVv || mergeStateVector(*m_recordedVv).first)
+    if (!m_recordedVv || mergeStateVector(*m_recordedVv).first) {
+#if defined OPTION1_ALL_CHUNKS
       option1AllChunks();
+#elif defined OPTION2_JUST_LATEST
+      option2JustLatest();
+#else
+      sendSyncInterest();
+#endif
+    }
     m_recordedVv = nullptr;
   }
 
@@ -198,6 +205,7 @@ Logic::option1AllChunks() {
 
   for (ndn::Block block : blocks) {
     Name syncName(m_syncPrefix);
+    syncName.append(Name::Component(block));
 
     Interest interest(syncName, time::milliseconds(1000));
     interest.setCanBePrefix(true);
@@ -222,6 +230,39 @@ Logic::option1AllChunks() {
   }
 }
 
+void
+Logic::option2JustLatest()
+{
+  Name syncName(m_syncPrefix);
+
+  {
+    std::lock_guard<std::mutex> lock(m_vvMutex);
+    syncName.append(Name::Component(m_vv.encodeMostRecent()));
+  }
+
+  Interest interest(syncName, time::milliseconds(1000));
+  interest.setCanBePrefix(true);
+  interest.setMustBeFresh(true);
+
+  switch (m_securityOptions.interestSigningInfo.getSignerType())
+  {
+    case security::SigningInfo::SIGNER_TYPE_NULL:
+      interest.setName(syncName.appendNumber(0));
+      break;
+
+    case security::SigningInfo::SIGNER_TYPE_HMAC:
+      m_keyChainMem.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+
+    default:
+      m_keyChain.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+  }
+
+  clogger::getLogger()->log("outbound sync interest", interest);
+  m_face.expressInterest(interest, nullptr, nullptr, nullptr);
+}
+
 std::pair<bool, bool>
 Logic::mergeStateVector(const VersionVector &vvOther)
 {
@@ -244,7 +285,7 @@ Logic::mergeStateVector(const VersionVector &vvOther)
     {
       for (unsigned int i=seqCurrent+1; i<=seqOther; i++) {
         std::ostringstream stream;
-        stream << nidOther << ":" << seqOther;
+        stream << Name(nidOther).get(-1).toUri() << ":" << seqOther;
         clogger::getLogger()->log("new data", stream.str());
       }
       otherVectorNew = true;
@@ -271,8 +312,14 @@ Logic::mergeStateVector(const VersionVector &vvOther)
 
     if (seqOther < seq)
     {
+#ifdef OPTION2_JUST_LATEST
+      if (seqOther > 0) {
+#endif
       myVectorNew = true;
       break;
+#ifdef OPTION2_JUST_LATEST
+      }
+#endif
     }
   }
 

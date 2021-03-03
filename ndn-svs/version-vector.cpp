@@ -1,6 +1,6 @@
 /* -*- Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2012-2021 University of California, Los Angeles
+ * Copqyright (c) 2012-2021 University of California, Los Angeles
  *
  * This file is part of ndn-svs, synchronization library for distributed realtime
  * applications for NDN.
@@ -61,21 +61,21 @@ VersionVector::encode() const
 }
 
 ndn::Block
-VersionVector::encodeUpTo(std::reverse_iterator<const_iterator> *it, size_t chunkSize) const
+VersionVector::encodeMap(std::map<NodeID, SeqNo> local_map) const
 {
   ndn::encoding::Encoder enc;
 
   size_t totalLength = 0;
 
-  for (; *it != m_map.rend() && totalLength + 100 < chunkSize; it++)
+  for (auto it = local_map.rbegin(); it != local_map.rend(); it++)
   {
-    size_t valLength = enc.prependNonNegativeInteger((*it)->second);
+    size_t valLength = enc.prependNonNegativeInteger(it->second);
     totalLength += enc.prependVarNumber(valLength);
     totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
     totalLength += valLength;
 
     totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
-                                             reinterpret_cast<const uint8_t*>((*it)->first.c_str()), (*it)->first.size());
+                                             reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
   }
 
   totalLength += enc.prependVarNumber(totalLength);
@@ -89,13 +89,49 @@ VersionVector::encodeIntoChunks(int chunkSize) const {
   std::vector<ndn::Block> blocks;
   if (m_map.empty()) {
     blocks.push_back(encode());
-    return blocks;
   } else {
+    std::map<NodeID, SeqNo> local_map;
+    int charLength = 0;
     for (auto it = m_map.rbegin(); it != m_map.rend(); it++) {
-      blocks.push_back(encodeUpTo(&it, chunkSize));
+      if (charLength + it->first.size() + (local_map.size() + 1) * 16 > chunkSize) {
+        blocks.push_back(encodeMap(local_map));
+        local_map.clear();
+        charLength = 0;
+      }
+      charLength += it->first.size();
+      local_map[it->first] = it->second;
+
     }
+    blocks.push_back(encodeMap(local_map));
   }
   return blocks;
+}
+
+ndn::Block
+VersionVector::encodeMostRecent(int chunkSize) const {
+  ndn::encoding::Encoder enc;
+
+  size_t totalLength = 0;
+
+  for (auto it = orderedKeys.rbegin(); it != orderedKeys.rend(); it++)
+  {
+    if (totalLength + 16 > chunkSize)
+      break;
+    NodeID nid = *it;
+    SeqNo seqNo = m_map.find(nid)->second;
+    size_t valLength = enc.prependNonNegativeInteger(seqNo);
+    totalLength += enc.prependVarNumber(valLength);
+    totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+    totalLength += valLength;
+
+    totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                             reinterpret_cast<const uint8_t*>(nid.c_str()), nid.size());
+  }
+
+  totalLength += enc.prependVarNumber(totalLength);
+  totalLength += enc.prependVarNumber(tlv::VersionVector);
+
+  return enc.block();
 }
 
 std::string

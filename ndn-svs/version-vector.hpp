@@ -54,10 +54,12 @@ public:
   ndn::Block
   encode() const;
 
-  /** Encode the version vector to a string */
+
   std::vector<ndn::Block>
   encodeIntoChunks(int chunkSize) const;
 
+  ndn::Block
+  encodeMostRecent(int chunkSize) const;
 
   /** Get a human-readable representation */
   std::string
@@ -67,6 +69,8 @@ public:
   set(NodeID nid, SeqNo seqNo)
   {
     m_map[nid] = seqNo;
+    orderedKeys.remove(nid);
+    orderedKeys.push_back(nid);
     return seqNo;
   }
 
@@ -96,7 +100,8 @@ public:
   }
 private:
   std::map<NodeID, SeqNo> m_map;
-  Block encodeUpTo(std::reverse_iterator<const_iterator> *it, size_t chunkSize) const;
+  std::list<NodeID> orderedKeys;
+  Block encodeMap(std::map<NodeID, SeqNo> local_map) const;
 };
 
 } // namespace ndn

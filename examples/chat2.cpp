@@ -48,6 +48,13 @@ public:
     instanceName = ndn::Name(m_options.m_id).get(-1).toUri();
     clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
     clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
+#if defined OPTION1_ALL_CHUNKS
+    clogger::getLogger()->log("startup", "option1: all chunks");
+#elif defined OPTION2_JUST_LATEST
+    clogger::getLogger()->log("startup", "option2: just latest");
+#elif defined OPTION5_NO_CHUNKS
+    clogger::getLogger()->log("startup", "option5: no chunks");
+#endif
 
     ndn::svs::SecurityOptions securityOptions;
     securityOptions.interestSigningInfo.setSigningHmacKey("dGhpcyBpcyBhIHNlY3JldCBtZXNzYWdl");

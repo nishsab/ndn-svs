@@ -16,6 +16,7 @@
 
 #include "socket-base.hpp"
 #include "store-memory.hpp"
+#include "clogger.h"
 
 #include <ndn-cxx/security/signing-helpers.hpp>
 
@@ -66,6 +67,7 @@ SocketBase::publishData(const Block& content, const ndn::time::milliseconds& fre
   NodeID pubId = id != EMPTY_NODE_ID ? id : m_id;
   SeqNo newSeq = m_logic.getSeqNo(pubId) + 1;
 
+  clogger::getLogger()->log("publish data", to_string(newSeq));
   Name dataName = getDataName(pubId, newSeq);
   shared_ptr<Data> data = make_shared<Data>(dataName);
   data->setContent(content);
