@@ -237,7 +237,7 @@ Logic::option2JustLatest()
 
   {
     std::lock_guard<std::mutex> lock(m_vvMutex);
-    syncName.append(Name::Component(m_vv.encodeMostRecent()));
+    syncName.append(Name::Component(m_vv.encodeMostRecent(500)));
   }
 
   Interest interest(syncName, time::milliseconds(1000));
