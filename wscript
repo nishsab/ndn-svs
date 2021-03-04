@@ -36,6 +36,12 @@ def options(opt):
                       help='Send all chunks in sync interest')
     optgrp.add_option('--option2-just-latest', action='store_true', default=False,
                       help='Only use latest seq nos in sync interest')
+    optgrp.add_option('--option3-latest-plus-random', action='store_true', default=False,
+                      help='Latest plus random')
+    optgrp.add_option('--option3-latest-plus-random3', action='store_true', default=False,
+                      help='Latest plus 3 random')
+    optgrp.add_option('--option4-random', action='store_true', default=False,
+                      help='Purely random')
 
 def configure(conf):
     conf.start_msg('Building static library')
@@ -85,6 +91,9 @@ def configure(conf):
     conf.define_cond('NDN_SVS_HAVE_TESTS', conf.env.WITH_TESTS)
     conf.define_cond('OPTION1_ALL_CHUNKS', conf.options.option1_all_chunks)
     conf.define_cond('OPTION2_JUST_LATEST', conf.options.option2_just_latest)
+    conf.define_cond('OPTION3_LATEST_PLUS_RANDOM', conf.options.option3_latest_plus_random)
+    conf.define_cond('OPTION3_LATEST_PLUS_RANDOM3', conf.options.option3_latest_plus_random3)
+    conf.define_cond('OPTION4_RANDOM', conf.options.option4_random)
 
     # The config header will contain all defines that were added using conf.define()
     # or conf.define_cond().  Everything that was added directly to conf.env.DEFINES
