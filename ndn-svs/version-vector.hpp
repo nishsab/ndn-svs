@@ -61,6 +61,12 @@ public:
   ndn::Block
   encodeMostRecent(u_int64_t chunkSize) const;
 
+  ndn::Block
+  encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom) const;
+
+  ndn::Block
+  encodeRandom(u_int64_t chunkSize) const;
+
   /** Get a human-readable representation */
   std::string
   toStr() const;

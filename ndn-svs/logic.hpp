@@ -175,6 +175,12 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   void
   option2JustLatest();
 
+  void
+  option3LatestPlusRandom();
+
+  void
+  option4Random();
+
   std::vector<ndn::Block> getAllEncodings();
 
   /**

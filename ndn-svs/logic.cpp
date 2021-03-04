@@ -138,10 +138,14 @@ Logic::retxSyncInterest(const bool send, unsigned int delay)
     // Only send interest if in steady state or local vector has newer state
     // than recorded interests
     if (!m_recordedVv || mergeStateVector(*m_recordedVv).first) {
-#if defined OPTION1_ALL_CHUNKS
+#if defined(OPTION1_ALL_CHUNKS)
       option1AllChunks();
-#elif defined OPTION2_JUST_LATEST
+#elif defined(OPTION2_JUST_LATEST)
       option2JustLatest();
+#elif defined(OPTION3_LATEST_PLUS_RANDOM) || defined(OPTION3_LATEST_PLUS_RANDOM3)
+      option3LatestPlusRandom();
+#elif defined(OPTION4_RANDOM)
+      option4Random();
 #else
       sendSyncInterest();
 #endif
@@ -263,6 +267,78 @@ Logic::option2JustLatest()
   m_face.expressInterest(interest, nullptr, nullptr, nullptr);
 }
 
+void
+Logic::option3LatestPlusRandom()
+{
+
+  Name syncName(m_syncPrefix);
+
+  {
+    std::lock_guard<std::mutex> lock(m_vvMutex);
+#ifdef OPTION3_LATEST_PLUS_RANDOM
+    syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, 1)));
+#else
+    syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, 3)));
+#endif
+
+  }
+
+  Interest interest(syncName, time::milliseconds(1000));
+  interest.setCanBePrefix(true);
+  interest.setMustBeFresh(true);
+
+  switch (m_securityOptions.interestSigningInfo.getSignerType())
+  {
+    case security::SigningInfo::SIGNER_TYPE_NULL:
+      interest.setName(syncName.appendNumber(0));
+      break;
+
+    case security::SigningInfo::SIGNER_TYPE_HMAC:
+      m_keyChainMem.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+
+    default:
+      m_keyChain.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+  }
+
+  clogger::getLogger()->log("outbound sync interest", interest);
+  m_face.expressInterest(interest, nullptr, nullptr, nullptr);
+}
+
+void
+Logic::option4Random()
+{
+  Name syncName(m_syncPrefix);
+
+  {
+    std::lock_guard<std::mutex> lock(m_vvMutex);
+    syncName.append(Name::Component(m_vv.encodeRandom(500)));
+  }
+
+  Interest interest(syncName, time::milliseconds(1000));
+  interest.setCanBePrefix(true);
+  interest.setMustBeFresh(true);
+
+  switch (m_securityOptions.interestSigningInfo.getSignerType())
+  {
+    case security::SigningInfo::SIGNER_TYPE_NULL:
+      interest.setName(syncName.appendNumber(0));
+      break;
+
+    case security::SigningInfo::SIGNER_TYPE_HMAC:
+      m_keyChainMem.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+
+    default:
+      m_keyChain.sign(interest, m_securityOptions.interestSigningInfo);
+      break;
+  }
+
+  clogger::getLogger()->log("outbound sync interest", interest);
+  m_face.expressInterest(interest, nullptr, nullptr, nullptr);
+}
+
 std::pair<bool, bool>
 Logic::mergeStateVector(const VersionVector &vvOther)
 {
@@ -310,16 +386,14 @@ Logic::mergeStateVector(const VersionVector &vvOther)
     SeqNo seq = entry.second;
     SeqNo seqOther = vvOther.get(nid);
 
+#if defined(OPTION2_JUST_LATEST) || defined(OPTION3_LATEST_PLUS_RANDOM) || defined(OPTION3_LATEST_PLUS_RANDOM3) || defined(OPTION4_RANDOM)
+    if (seqOther > 0 && seqOther < seq)
+#else
     if (seqOther < seq)
-    {
-#ifdef OPTION2_JUST_LATEST
-      if (seqOther > 0) {
 #endif
+    {
       myVectorNew = true;
       break;
-#ifdef OPTION2_JUST_LATEST
-      }
-#endif
     }
   }
 

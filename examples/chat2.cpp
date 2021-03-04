@@ -48,11 +48,17 @@ public:
     instanceName = ndn::Name(m_options.m_id).get(-1).toUri();
     clogger::getLogger()->startLogger("/opt/svs/logs/svs/" + instanceName + ".log", instanceName);
     clogger::getLogger()->logf("startup", "Starting logging for %s", instanceName.c_str());
-#if defined OPTION1_ALL_CHUNKS
+#if defined(OPTION1_ALL_CHUNKS)
     clogger::getLogger()->log("startup", "option1: all chunks");
-#elif defined OPTION2_JUST_LATEST
+#elif defined(OPTION2_JUST_LATEST)
     clogger::getLogger()->log("startup", "option2: just latest");
-#elif defined OPTION5_NO_CHUNKS
+#elif defined(OPTION3_LATEST_PLUS_RANDOM)
+    clogger::getLogger()->log("startup", "option3: latest plus random 1");
+#elif defined(OPTION3_LATEST_PLUS_RANDOM3)
+    clogger::getLogger()->log("startup", "option3: latest plus random 3");
+#elif defined(OPTION4_RANDOM)
+    clogger::getLogger()->log("startup", "option4: pure random");
+#else
     clogger::getLogger()->log("startup", "option5: no chunks");
 #endif
 
