@@ -137,7 +137,7 @@ Logic::retxSyncInterest(const bool send, unsigned int delay)
   {
     // Only send interest if in steady state or local vector has newer state
     // than recorded interests
-    if (!m_recordedVv || mergeStateVector(*m_recordedVv).first) {
+    if (isNullOrLocalNewer(m_recordedVv)) {
 #if defined(OPTION1_ALL_CHUNKS)
       option1AllChunks();
 #elif defined(OPTION2_JUST_LATEST)
@@ -150,7 +150,10 @@ Logic::retxSyncInterest(const bool send, unsigned int delay)
       sendSyncInterest();
 #endif
     }
-    m_recordedVv = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(m_vvMutex);
+      m_recordedVv = nullptr;
+    }
   }
 
   if (delay == 0)
@@ -270,7 +273,6 @@ Logic::option2JustLatest()
 void
 Logic::option3LatestPlusRandom()
 {
-
   Name syncName(m_syncPrefix);
 
   {
@@ -386,7 +388,7 @@ Logic::mergeStateVector(const VersionVector &vvOther)
     SeqNo seq = entry.second;
     SeqNo seqOther = vvOther.get(nid);
 
-#if defined(OPTION2_JUST_LATEST) || defined(OPTION3_LATEST_PLUS_RANDOM) || defined(OPTION3_LATEST_PLUS_RANDOM3) || defined(OPTION4_RANDOM)
+#if defined(OPTION1_ALL_CHUNKS) || defined(OPTION2_JUST_LATEST) || defined(OPTION3_LATEST_PLUS_RANDOM) || defined(OPTION3_LATEST_PLUS_RANDOM3) || defined(OPTION4_RANDOM)
     if (seqOther > 0 && seqOther < seq)
 #else
     if (seqOther < seq)
@@ -398,6 +400,34 @@ Logic::mergeStateVector(const VersionVector &vvOther)
   }
 
   return std::make_pair(myVectorNew, otherVectorNew);
+}
+
+bool
+Logic::isNullOrLocalNewer(std::unique_ptr<VersionVector> &vvOther)
+{
+  std::lock_guard<std::mutex> lock(m_vvMutex);
+  if (!vvOther)
+    return true;
+
+  bool myVectorNew = false;
+  for (auto entry : m_vv)
+  {
+    NodeID nid = entry.first;
+    SeqNo seq = entry.second;
+    SeqNo seqOther = vvOther->get(nid);
+
+#if defined(OPTION2_JUST_LATEST) || defined(OPTION3_LATEST_PLUS_RANDOM) || defined(OPTION3_LATEST_PLUS_RANDOM3) || defined(OPTION4_RANDOM)
+    if (seqOther > 0 && seqOther < seq)
+#else
+    if (seqOther < seq)
+#endif
+    {
+      myVectorNew = true;
+      break;
+    }
+  }
+
+  return myVectorNew;
 }
 
 void
@@ -451,9 +481,8 @@ Logic::getCurrentTime() const
 bool
 Logic::recordVector(const VersionVector &vvOther)
 {
-  if (!m_recordedVv) return false;
-
   std::lock_guard<std::mutex> lock(m_vvMutex);
+  if (!m_recordedVv) return false;
 
   for (auto entry : vvOther)
   {

@@ -196,6 +196,8 @@ NDN_SVS_PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::pair<bool, bool>
   mergeStateVector(const VersionVector &vvOther);
 
+  bool
+  isNullOrLocalNewer(std::unique_ptr<VersionVector> &vvOther);
   /**
    * @brief Record vector by merging it into m_recordedVv
    *

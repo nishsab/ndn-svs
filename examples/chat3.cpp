@@ -33,7 +33,9 @@ public:
 public:
   std::string prefix;
   std::string m_id;
-  int m_stateVectorLogIntervalInMilliseconds = 100;
+  int m_stateVectorLogIntervalInMilliseconds = 250;
+  int m_start_delay;
+  int m_duration;
 };
 
 class Program
@@ -43,7 +45,7 @@ public:
     : m_rng(ndn::random::getRandomNumberEngine()),
       m_uniform_mean(50, 500),
       m_uniform_wait(0, 30),
-      m_sleepTime(m_uniform_mean(m_rng)),
+      m_sleepTime(15),
       runTimeInMillseconds(15*60*1000),
     m_options(options)
   {
@@ -93,6 +95,9 @@ public:
   run()
   {
     m_running = true;
+    long endTime = currentTimeMills() + runTimeInMillseconds;
+    usleep(m_options.m_start_delay * 1000000);
+    
     //usleep(m_uniform_wait(m_rng)*1000000);
     std::thread thread_svs([this] { face.processEvents(); });
     std::thread thread_log_state_vector(&Program::logStateVector, this);
@@ -101,7 +106,7 @@ public:
     std::string init_msg = "User " + m_options.m_id + " has joined the groupchat";
     publishMsg(init_msg);
 
-    long endTime = currentTimeMills() + runTimeInMillseconds;
+    long stopPublishingTime = currentTimeMills() + m_options.m_duration * 1000;
 
     int i=0;
     while (currentTimeMills() < endTime) {
@@ -111,8 +116,10 @@ public:
         std::string message = ss.str();
         //std::cout << "Publishing " << message << std::endl;
 
-        publishMsg(message);
-        clogger::getLogger()->log("publish", message);
+        if (currentTimeMills() < stopPublishingTime) {
+          publishMsg(message);
+          clogger::getLogger()->log("publish", message);
+        }
         int sleepTimeInMilliseconds = m_sleepTime(m_rng) * 1000;
         long timeRemaining = endTime - currentTimeMills();
         if (timeRemaining < sleepTimeInMilliseconds) {
@@ -182,14 +189,16 @@ public:
 int
 main(int argc, char **argv)
 {
-  if (argc != 2) {
-    std::cout << "Usage: client <prefix>" << std::endl;
+  if (argc != 4) {
+    std::cout << "Usage: client start duration" << std::endl;
     exit(1);
   }
 
   Options opt;
   opt.m_id = argv[1];
-
+  opt.m_start_delay = atoi(argv[2]);
+  opt.m_duration = atoi(argv[3]);
+  
   Program program(opt);
   program.run();
   return 0;

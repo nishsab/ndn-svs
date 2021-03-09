@@ -11,11 +11,13 @@
  *
  * ndn-svs library is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ * PARTICLAR PURPOSE. See the GNU Lesser General Public License for more details.
  */
 
 #include "version-vector.hpp"
 #include "tlv.hpp"
+#include <clogger.h>
+#include <ndn-cxx/util/random.hpp>
 
 namespace ndn {
 namespace svs {
@@ -35,7 +37,7 @@ VersionVector::VersionVector(const ndn::Block& block) {
       SeqNo(ndn::encoding::readNonNegativeInteger(*val));
   }
 }
-
+  
 ndn::Block
 VersionVector::encode() const
 {
@@ -59,7 +61,7 @@ VersionVector::encode() const
 
   return enc.block();
 }
-
+  
 ndn::Block
 VersionVector::encodeMap(std::map<NodeID, SeqNo> local_map) const
 {
@@ -83,7 +85,7 @@ VersionVector::encodeMap(std::map<NodeID, SeqNo> local_map) const
 
   return enc.block();
 }
-
+  
 std::vector<ndn::Block>
 VersionVector::encodeIntoChunks(u_int64_t chunkSize) const {
   std::vector<ndn::Block> blocks;
@@ -141,22 +143,25 @@ VersionVector::encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom) con
   std::set<NodeID> seen;
 
   size_t totalLength = 0;
-
-  for (int i=0; i< numRandom; i++) {
-    int random = rand() % orderedKeys.size();
-    auto it = m_map.begin();
-    for (int j=0; j<random; j++) {
-      it++;
-    }
-    if (seen.find(it->first) != seen.end()) {
-      seen.insert(it->first);
-      size_t valLength = enc.prependNonNegativeInteger(it->second);
-      totalLength += enc.prependVarNumber(valLength);
-      totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
-      totalLength += valLength;
-
-      totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
-                                               reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
+  if (m_map.size() > 0) {
+    for (int i=0; i< numRandom; i++) {
+      uint32_t rint = ndn::random::generateWord32();
+      int random = rint % m_map.size();
+      auto it = m_map.begin();
+      
+      for (int j=0; j<random; j++) {
+        it++;
+      }
+      if (seen.find(it->first) == seen.end()) {
+        seen.insert(it->first);
+        size_t valLength = enc.prependNonNegativeInteger(it->second);
+        totalLength += enc.prependVarNumber(valLength);
+        totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+        totalLength += valLength;
+        
+        totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                                 reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
+      }
     }
   }
 
@@ -182,7 +187,7 @@ VersionVector::encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom) con
 
   return enc.block();
 }
-
+  
 ndn::Block
 VersionVector::encodeRandom(u_int64_t chunkSize) const {
   ndn::encoding::Encoder enc;
@@ -212,7 +217,7 @@ VersionVector::encodeRandom(u_int64_t chunkSize) const {
 
   return enc.block();
 }
-
+  
 std::string
 VersionVector::toStr() const
 {
@@ -223,6 +228,6 @@ VersionVector::toStr() const
   }
   return stream.str();
 }
-
-} // namespace ndn
+  
+  } // namespace ndn
 } // namespace svs

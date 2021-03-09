@@ -108,6 +108,7 @@ private:
   std::map<NodeID, SeqNo> m_map;
   std::list<NodeID> orderedKeys;
   Block encodeMap(std::map<NodeID, SeqNo> local_map) const;
+  
 };
 
 } // namespace ndn
