@@ -217,6 +217,54 @@ VersionVector::encodeRandom(u_int64_t chunkSize) const {
 
   return enc.block();
 }
+
+ndn::Block
+VersionVector::encodeRandom(u_int64_t chunkSize, const VersionVector &local, const VersionVector &other) const {
+  ndn::encoding::Encoder enc;
+
+  std::set<NodeID> seen;
+  size_t totalLength = 0;
+  for (auto it = other.begin(); it != other.end(); it++) {
+    if (totalLength + it->first.length() + 16 > chunkSize)
+      break;
+    SeqNo localSeqNo = local.get(it->first);
+    if (it->second < localSeqNo) {
+      seen.insert(it->first);
+      size_t valLength = enc.prependNonNegativeInteger(localSeqNo);
+      totalLength += enc.prependVarNumber(valLength);
+      totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+      totalLength += valLength;
+
+      totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                               reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
+    }
+  }
+
+  std::vector<std::pair<NodeID, SeqNo>> entries;
+  for (auto it = m_map.rbegin(); it != m_map.rend(); it++) {
+    if (seen.find(it->first) == seen.end()) {
+      entries.push_back(std::make_pair(it->first, it->second));
+  }
+
+  std::random_shuffle(entries.begin(), entries.end());
+
+  for (auto it = entries.begin(); it != entries.end(); it++) {
+    if (totalLength + it->first.length() + 16 > chunkSize)
+      break;
+    size_t valLength = enc.prependNonNegativeInteger(it->second);
+    totalLength += enc.prependVarNumber(valLength);
+    totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+    totalLength += valLength;
+
+    totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                             reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
+  }
+
+  totalLength += enc.prependVarNumber(totalLength);
+  totalLength += enc.prependVarNumber(tlv::VersionVector);
+
+  return enc.block();
+}
   
 std::string
 VersionVector::toStr() const
