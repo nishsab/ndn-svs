@@ -315,7 +315,10 @@ Logic::option4Random()
 
   {
     std::lock_guard<std::mutex> lock(m_vvMutex);
-    syncName.append(Name::Component(m_vv.encodeRandom(500)));
+    if (m_recordedVv)
+      syncName.append(Name::Component(m_vv.encodeRandom(500, m_vv, *m_recordedVv)));
+    else
+      syncName.append(Name::Component(m_vv.encodeRandom(500)));
   }
 
   Interest interest(syncName, time::milliseconds(1000));

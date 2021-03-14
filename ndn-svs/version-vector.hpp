@@ -67,6 +67,9 @@ public:
   ndn::Block
   encodeRandom(u_int64_t chunkSize) const;
 
+  ndn::Block
+  encodeRandom(u_int64_t chunkSize, const VersionVector &local, const VersionVector &other) const;
+
   /** Get a human-readable representation */
   std::string
   toStr() const;
