@@ -244,6 +244,7 @@ VersionVector::encodeRandom(u_int64_t chunkSize, const VersionVector &local, con
   for (auto it = m_map.rbegin(); it != m_map.rend(); it++) {
     if (seen.find(it->first) == seen.end()) {
       entries.push_back(std::make_pair(it->first, it->second));
+    }
   }
 
   std::random_shuffle(entries.begin(), entries.end());
