@@ -62,7 +62,13 @@ public:
   encodeMostRecent(u_int64_t chunkSize) const;
 
   ndn::Block
+  encodeMostRecent(u_int64_t chunkSize, const VersionVector &local, const VersionVector &other) const;
+
+  ndn::Block
   encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom) const;
+
+  ndn::Block
+  encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom, const VersionVector &local, const VersionVector &other) const;
 
   ndn::Block
   encodeRandom(u_int64_t chunkSize) const;

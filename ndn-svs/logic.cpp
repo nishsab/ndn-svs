@@ -97,6 +97,7 @@ Logic::onSyncInterestValidated(const Interest &interest)
   try
   {
     vvOther = make_shared<VersionVector>(n.get(-2));
+    clogger::getLogger()->log("debug", vvOther->toStr());
   }
   catch (ndn::tlv::Error&)
   {
@@ -244,7 +245,11 @@ Logic::option2JustLatest()
 
   {
     std::lock_guard<std::mutex> lock(m_vvMutex);
-    syncName.append(Name::Component(m_vv.encodeMostRecent(500)));
+    if (m_recordedVv)
+      syncName.append(Name::Component(m_vv.encodeMostRecent(500, m_vv, *m_recordedVv)));
+    else
+      syncName.append(Name::Component(m_vv.encodeMostRecent(500)));
+    //syncName.append(Name::Component(m_vv.encodeMostRecent(500)));
   }
 
   Interest interest(syncName, time::milliseconds(1000));
@@ -278,10 +283,16 @@ Logic::option3LatestPlusRandom()
   {
     std::lock_guard<std::mutex> lock(m_vvMutex);
 #ifdef OPTION3_LATEST_PLUS_RANDOM
-    syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, 1)));
+    int numRandom = 1;
+    //syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, 1)));
 #else
-    syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, 3)));
+    int numRandom = 3;
+    //syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, 3)));
 #endif
+    if (m_recordedVv)
+      syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, numRandom, m_vv, *m_recordedVv)));
+    else
+      syncName.append(Name::Component(m_vv.encodeMostRecentAndRandom(500, numRandom)));
 
   }
 

@@ -137,6 +137,53 @@ VersionVector::encodeMostRecent(u_int64_t chunkSize) const {
 }
 
 ndn::Block
+VersionVector::encodeMostRecent(u_int64_t chunkSize, const VersionVector &local, const VersionVector &other) const {
+  ndn::encoding::Encoder enc;
+
+  std::set<NodeID> seen;
+
+  size_t totalLength = 0;
+
+  for (auto it = other.begin(); it != other.end(); it++) {
+    if (totalLength + it->first.length() + 16 > chunkSize)
+      break;
+    SeqNo localSeqNo = local.get(it->first);
+    if (it->second < localSeqNo) {
+      seen.insert(it->first);
+      size_t valLength = enc.prependNonNegativeInteger(localSeqNo);
+      totalLength += enc.prependVarNumber(valLength);
+      totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+      totalLength += valLength;
+
+      totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                               reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
+    }
+  }
+
+  for (auto it = orderedKeys.rbegin(); it != orderedKeys.rend(); it++)
+  {
+    if (seen.find(*it) != seen.end())
+      continue;
+    if (totalLength + it->length() + 16 > chunkSize)
+      break;
+    NodeID nid = *it;
+    SeqNo seqNo = m_map.find(nid)->second;
+    size_t valLength = enc.prependNonNegativeInteger(seqNo);
+    totalLength += enc.prependVarNumber(valLength);
+    totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+    totalLength += valLength;
+
+    totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                             reinterpret_cast<const uint8_t*>(nid.c_str()), nid.size());
+  }
+
+  totalLength += enc.prependVarNumber(totalLength);
+  totalLength += enc.prependVarNumber(tlv::VersionVector);
+
+  return enc.block();
+}
+
+ndn::Block
 VersionVector::encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom) const {
   ndn::encoding::Encoder enc;
 
@@ -159,6 +206,77 @@ VersionVector::encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom) con
         totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
         totalLength += valLength;
         
+        totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                                 reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
+      }
+    }
+  }
+
+  for (auto it = orderedKeys.rbegin(); it != orderedKeys.rend(); it++)
+  {
+    if (seen.find(*it) != seen.end())
+      continue;
+    if (totalLength + it->length() + 16 > chunkSize)
+      break;
+    NodeID nid = *it;
+    SeqNo seqNo = m_map.find(nid)->second;
+    size_t valLength = enc.prependNonNegativeInteger(seqNo);
+    totalLength += enc.prependVarNumber(valLength);
+    totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+    totalLength += valLength;
+
+    totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                             reinterpret_cast<const uint8_t*>(nid.c_str()), nid.size());
+  }
+
+  totalLength += enc.prependVarNumber(totalLength);
+  totalLength += enc.prependVarNumber(tlv::VersionVector);
+
+  return enc.block();
+}
+
+ndn::Block
+VersionVector::encodeMostRecentAndRandom(u_int64_t chunkSize, int numRandom, const VersionVector &local, const VersionVector &other) const {
+  ndn::encoding::Encoder enc;
+
+  std::set<NodeID> seen;
+
+  size_t totalLength = 0;
+
+  for (auto it = other.begin(); it != other.end(); it++) {
+    if (totalLength + it->first.length() + 16 > chunkSize)
+      break;
+    SeqNo localSeqNo = local.get(it->first);
+    if (it->second < localSeqNo) {
+      seen.insert(it->first);
+      size_t valLength = enc.prependNonNegativeInteger(localSeqNo);
+      totalLength += enc.prependVarNumber(valLength);
+      totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+      totalLength += valLength;
+
+      totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
+                                               reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
+    }
+  }
+
+  if (m_map.size() > 0) {
+    for (int i=0; i< numRandom; i++) {
+      uint32_t rint = ndn::random::generateWord32();
+      int random = rint % m_map.size();
+      auto it = m_map.begin();
+
+      for (int j=0; j<random; j++) {
+        it++;
+      }
+      if (seen.find(it->first) == seen.end()) {
+        if (totalLength + it->first.length() + 16 > chunkSize)
+          break;
+        seen.insert(it->first);
+        size_t valLength = enc.prependNonNegativeInteger(it->second);
+        totalLength += enc.prependVarNumber(valLength);
+        totalLength += enc.prependVarNumber(tlv::VersionVectorValue);
+        totalLength += valLength;
+
         totalLength += enc.prependByteArrayBlock(tlv::VersionVectorKey,
                                                  reinterpret_cast<const uint8_t*>(it->first.c_str()), it->first.size());
       }
